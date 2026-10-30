@@ -27,3 +27,40 @@
   a Nix check rejects version/schema drift. This narrowly scoped functional flake
   change extends Phase 1's formatting-only Nix scope to make clean installs
   reproducible in the repository's own development environment.
+
+## Phase 2 — Disposable acceptance infrastructure
+
+- **A separate reserved stack, never developer opt-in.** Repository-path-hashed
+  project/subdomain names, fixed HTTP 18080/Postgres 55432, separate state/volumes
+  and a database identity marker coexist with the running developer stack.
+  Commands reject arbitrary registrations and remote Docker/endpoints. Final
+  published ports bind loopback; HTTP is confined to this disposable target.
+  Nhost's initial bootstrap publishes on all interfaces, so provisioning is for
+  a trusted local host, not shared/production infrastructure.
+- **Use the pinned CLI, but verify independently.** Explicit absolute root,
+  configuration and state paths avoid CLI lookup ambiguity. Config is copied,
+  never default-generated or overwritten in the developer project. A clean Auth
+  baseline is captured before app SQL; the runner then owns a disposable-only
+  migration ledger and metadata application. Hasura inconsistency checks and a
+  recreated Constellation guard against false CLI success/stale role schemas.
+- **No fabricated permissions to make the harness green.** Both engines accept
+  real eligible fixture JWTs, but Phase 2 has no app permissions. Tests check
+  Hasura's empty-role stub and Constellation's explicit missing-role schema,
+  plus forged-token/directory denial. Later phases must replace these empty-role
+  expectations with their actual API schema contracts.
+- **Preserve the measured rate-limit behavior.** Real requests prove the configured
+  ten-request per-IP burst and its reset after recreating only disposable Auth.
+  Each normal group has explicit eight-request email/sign-in budgets, a runner
+  lock and one worker; fixtures sign in once without sending email and refresh
+  tokens in memory. No production rate overlay or SMTP credentials are needed.
+  After container recreation, bounded harmless route probes wait for Traefik
+  registration before spending Auth budgets or checking GraphQL. Container health
+  alone proved insufficient; counted requests are never retried. Guard self-tests
+  inject temporary marker copies instead of putting live registration at risk.
+- **Scratch-only rollback, pinned browser runtime.** Migration down/up runs only
+  in minted scratch databases restored from the stack's Auth dump/roles/extensions;
+  cleanup is tested after success and a deliberate failure. npm Playwright 1.61.1
+  matches the ordinary nixpkgs browser driver, not the older Nhost overlay.
+  Desktop and mobile Chromium smoke tests own/tear down strict-port Vite, disable
+  private browser artifacts and map the custom local subdomain to loopback rather
+  than depending on wildcard public DNS. CI executes these gates immediately.

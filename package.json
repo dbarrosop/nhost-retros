@@ -13,9 +13,15 @@
     "format": "biome check --write .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "test:target": "node scripts/test-target.ts",
+    "test:backend": "node scripts/run-backend.ts",
+    "test:e2e": "node scripts/run-e2e.ts",
+    "test:migrations": "node scripts/run-migrations.ts",
+    "test:browsers": "pnpm --filter @retro/frontend exec playwright install chromium"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.11"
-  }
+  },
+  "type": "module"
 }

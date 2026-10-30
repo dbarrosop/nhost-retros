@@ -9,7 +9,9 @@ The welcome screen is implemented, including responsive dark styling, reflection
 prompts, keyboard navigation and a not-found route. It is a **welcome preview**:
 sign-in, sessions, private answers and facilitator tools are not available yet.
 The prompts are editorial content, not real participant answers. No backend
-connection, credentials or running Nhost stack is needed for this slice.
+connection, credentials or running Nhost stack is needed to view it. Guarded
+backend and desktop/mobile browser acceptance infrastructure is now available;
+it does not add sign-in or application-data permissions.
 
 ## Local development
 
@@ -36,9 +38,8 @@ needs configuration; the current welcome preview does not consume those values.
 keys, database passwords or SMTP credentials.** Local environment files are ignored.
 
 The existing developer backend is not disposable. These commands do not touch
-Docker, Auth data, database volumes, migrations or metadata. Guarded disposable
-backend/browser test runners will be introduced in the next slice; do not reset
-the developer stack to test this screen.
+Docker, Auth data, database volumes, migrations or metadata. Integration commands
+below provision a **separate disposable project**; never reset `backend-*`.
 
 ## Checks
 
@@ -52,12 +53,33 @@ nix flake check
 
 `pnpm format` applies Biome formatting, import organization and safe fixes. Tests
 use Vitest, jsdom and Testing Library to exercise real routes, the welcome screen,
-in-page navigation, keyboard skip-link order and not-found recovery. Browser
-acceptance tooling is not installed yet. CI runs these frontend/static gates and
-the existing Nix format check without requiring backend services.
+in-page navigation, keyboard skip-link order and not-found recovery. Backend
+unit tests exercise target guards, occupied ports, budgets and metadata loading.
+CI also provisions the isolated stack and executes the real-JWT, scratch-migration
+and Playwright gates, with matching Nix browsers.
 
-The workspace currently includes only `frontend`. Root recursive scripts run all
-introduced application suites. `backend/functions` is an unused, independent
+### Disposable backend and browser acceptance
+
+A running local Docker daemon is required. From the repo root, inside `nix develop`:
+
+```sh
+pnpm test:target provision
+pnpm test:target health
+pnpm test:migrations
+pnpm test:backend
+pnpm test:e2e
+# Only when finished with this disposable stack:
+pnpm test:target destroy
+```
+
+The runner reserves HTTP **18080**, Postgres **55432**, and browser Vite **5173**.
+It never registers the developer project, reuses developer secrets, or resets
+unmarked targets. Outside Nix, install the pinned CLI and Chromium prerequisites
+as described in [docs/operations.md](docs/operations.md). Missing services/browsers
+and occupied ports are failures, not skipped tests.
+
+The workspaces are `frontend` and `backend/tests`. Root recursive scripts run all
+introduced unit suites; the explicit commands above run integration acceptance. `backend/functions` is an unused, independent
 scaffold with a placeholder test; it is deliberately not an application workspace
 and is not represented as a passing suite.
 

@@ -39,6 +39,11 @@
           ];
         };
 
+        playwrightBrowsers = pkgs.playwright-driver.selectBrowsers {
+          withFirefox = false;
+          withWebkit = false;
+        };
+
         checkDeps = with pkgs; [
           nhost.biome
         ];
@@ -54,6 +59,16 @@
       in
       {
         checks = {
+          playwright-version = pkgs.runCommand "check-playwright-version"
+            {
+              npmVersion = (builtins.fromJSON (builtins.readFile ./frontend/package.json)).devDependencies."@playwright/test";
+              nixVersion = pkgs.playwright-driver.version;
+            }
+            ''
+              test "$npmVersion" = "$nixVersion"
+              mkdir "$out"
+            '';
+
           biome-version = pkgs.runCommand "check-biome-version"
             {
               npmVersion = (builtins.fromJSON (builtins.readFile ./package.json)).devDependencies."@biomejs/biome";
@@ -85,6 +100,10 @@
           default = pkgs.mkShell {
             # The npm wrapper honors this; generic Linux ELF binaries cannot run on NixOS.
             BIOME_BINARY = "${pkgs.nhost.biome}/bin/biome";
+            PLAYWRIGHT_BROWSERS_PATH = "${playwrightBrowsers}";
+            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+            # Nix browser wrappers carry their runtime libraries via rpath.
+            PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS = "true";
 
             buildInputs =
               with pkgs;

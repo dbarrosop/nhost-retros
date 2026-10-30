@@ -19,3 +19,6 @@ coverage/
 *.log
 playwright-report/
 test-results/
+
+# Registered disposable stack, generated credentials, compose and databases
+.local-test/

@@ -22,6 +22,27 @@ jobs:
       - run: pnpm test
       - run: pnpm --filter @retro/frontend build
 
+  acceptance:
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop -c pnpm install --frozen-lockfile
+      # Generated secrets/registration stay in restricted, ignored .local-test.
+      # Nix supplies CLI 1.51.2 and Chromium matching npm Playwright 1.61.1.
+      - run: nix develop -c pnpm test:target provision
+      - run: nix develop -c pnpm test:target health
+      - run: nix develop -c pnpm test:migrations
+      - run: nix develop -c pnpm test:backend
+      - run: nix develop -c pnpm test:e2e
+      - if: always()
+        run: |
+          if test -f .local-test/target.json; then
+            nix develop -c pnpm test:target destroy
+          fi
+
   nix:
     runs-on: ubuntu-latest
     steps:
