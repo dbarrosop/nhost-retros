@@ -39,19 +39,14 @@
           ];
         };
 
-        checkDeps = [
+        checkDeps = with pkgs; [
+          nhost.biome
         ];
 
-        nativeBuildInputs =
-          with pkgs;
-          [
-            nhost.biome
-            hasura-cli
-            bun
-          ]
-          ++ lib.optionals (stdenv.isDarwin && pkgs ? xcodegen) [
-            xcodegen
-          ];
+        nativeBuildInputs = with pkgs; [
+          nhost.pnpm
+          nhost.nodejs
+        ];
 
         buildInputs = [
         ];
@@ -82,6 +77,9 @@
                 gnumake
                 nixpkgs-fmt
                 nhost.nhost-cli
+                hasura-cli
+                skopeo
+
               ]
               ++ checkDeps
               ++ buildInputs
