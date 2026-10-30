@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "nhost": {
+      "command": "nhost",
+      "args": [
+        "mcp",
+        "start"
+      ],
+      "directTools": true
+    }
+  }
+}
