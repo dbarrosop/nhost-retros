@@ -11,7 +11,8 @@
       "!frontend/playwright-report",
       "scripts/**",
       "backend/tests/**",
-      "!backend/tests/node_modules"
+      "!backend/tests/node_modules",
+      "backend/scripts/**"
     ]
   },
   "formatter": {

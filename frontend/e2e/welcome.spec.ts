@@ -5,7 +5,9 @@ test("welcome is readable, keyboard-accessible and fits the viewport", async ({ 
   await expect(
     page.getByRole("heading", { level: 1, name: "Make space for better work." }),
   ).toBeVisible();
-  await expect(page.getByText("Welcome preview. Team sign-in is not available yet.")).toBeVisible();
+  await expect(
+    page.getByText("For verified @nhost.io accounts. A one-time code is all you need."),
+  ).toBeVisible();
   await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: "Skip to content" });
   await expect(skip).toBeFocused();

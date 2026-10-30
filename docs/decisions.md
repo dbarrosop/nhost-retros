@@ -64,3 +64,50 @@
   Desktop and mobile Chromium smoke tests own/tear down strict-port Vite, disable
   private browser artifacts and map the custom local subdomain to loopback rather
   than depending on wildcard public DNS. CI executes these gates immediately.
+
+## Phase 3 — Verified OTP and trusted facilitation
+
+- **Separate signup and sign-in, no password UI.** Exact company emails are
+  normalized to trimmed lowercase. Existing Auth policy remains byte-for-byte
+  unchanged; real Mailhog OTPs exercise verification, invalid/expired/used codes,
+  resend and restoration. Unknown-account sign-in intentionally returns OK without
+  a session or account (anti-enumeration), so users explicitly choose Create
+  account. The signed-in shell honestly shows account readiness, not pretend data.
+- **Explicit lifecycle coordination on SDK primitives.** Nhost JS 4.9.0 owns Auth
+  requests, session decoding/storage and session notifications. Its default
+  middleware accepts responses without an application auth epoch, so this SPA uses
+  explicit refresh coordination instead: the SDK's cross-tab Web Lock name,
+  refresh on restoration/focus/reconnect/expiry, bounded requests and abort/epoch
+  acceptance. Epoch checks reject delayed same-tab verify/refresh responses. In
+  Web-Lock-capable browsers, signout also takes the exclusive SDK lock: refresh
+  persists its rotation before releasing the lock, and signout clears/revokes the
+  latest token under that same lock. Local access clears immediately; rotation
+  events are suppressed while signout waits, so an in-flight cross-tab refresh
+  cannot restore it. Without Web Locks, epoch checks still protect same-tab work.
+  Storage events adopt rotations without reflexively refreshing again (avoiding a
+  cross-tab refresh ping-pong). Only 401 or an ineligible session deletes stored
+  credentials, matching the SDK: transient failures do not invalidate a refresh
+  token even when its access JWT expires. Keep the account shell with a notice;
+  at JWT expiry cancel/clear private queries once, advance their generation and
+  set `canQuery=false` until recovery. Unexpired JWTs retain their queries. Retry
+  backoff doubles from one second to a ten-second cap and resets on success;
+  focus/reconnect/visibility still retries immediately. TanStack Query is
+  memory-only; identity/role changes also cancel/clear it, with generation/user/role
+  key helpers ready for the next data slice. Client checks are UX, never data
+  authorization.
+- **Provisioning is trusted SQL, not metadata or a frontend role toggle.** The
+  reversible migration registers the role but gives no memberships. Down refuses
+  live grants/defaults rather than silently deleting privileges. The local-only
+  operator command locks the account, verifies eligibility and ordinary user
+  membership, keeps default `user`, and changes only the requested membership.
+  Tests reuse guarded disposable connections. An explicit loopback-only SQL URL
+  additionally supports operator use on the existing developer backend without
+  exposing credentials or adding a server; test/reset tools never use that URL.
+  Both engines still expose no application access, even to internal `me` or
+  trusted facilitators. Live data-permission revocation is deferred to Phase 4.
+- **Reuse isolation and measure edge behavior.** Browser and policy requests spend
+  the existing per-group budgets; browser mail/codes stay in process memory and
+  no traces/storageState are written. The pinned Mailhog HTML contains six-digit
+  CSS colors; code extraction therefore anchors to element text. Backend SQL
+  expires only the disposable fixture's OTP to test expiry without waiting or
+  weakening Auth. Browser clock advancement tests only the resend cooldown.

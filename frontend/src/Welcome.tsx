@@ -1,3 +1,5 @@
+import { Link } from "@tanstack/react-router";
+
 const steps = [
   {
     number: "01",
@@ -34,10 +36,15 @@ export function Welcome() {
             A thoughtful retrospective starts with a little room to think. Look back with your team,
             find the patterns, and make the next chapter a little better.
           </p>
-          <a className="primary-link" href="#how-it-works">
+          <Link className="primary-link" to="/auth">
+            Join the conversation <span aria-hidden="true">↗</span>
+          </Link>
+          <p className="preview-note">
+            For verified @nhost.io accounts. A one-time code is all you need.
+          </p>
+          <a className="quiet-link" href="#how-it-works">
             What to expect <span aria-hidden="true">↓</span>
           </a>
-          <p className="preview-note">Welcome preview. Team sign-in is not available yet.</p>
         </div>
         <aside className="reflection-space" aria-labelledby="prompts-title">
           <div className="reflection-heading">

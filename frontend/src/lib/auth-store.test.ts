@@ -1,0 +1,400 @@
+import { createNhostClient } from "@nhost/nhost-js";
+import type { Session } from "@nhost/nhost-js/auth";
+import { MemoryStorage } from "@nhost/nhost-js/session";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AuthStore, authMessage, companyEmail, eligible, normalizeEmail } from "./auth-store";
+import { authQueryKey, createQueryClient } from "./query-client";
+
+function testSession(id = "first", roles = ["user", "me"]): Session {
+  const payload = { sub: id, exp: Date.now() / 1000 + 900 };
+  return {
+    accessToken: `e30.${btoa(JSON.stringify(payload))}.test`,
+    refreshToken: "test-only",
+    refreshTokenId: "test-only",
+    accessTokenExpiresIn: 900,
+    user: {
+      id,
+      email: `${id}@nhost.io`,
+      emailVerified: true,
+      isAnonymous: false,
+      defaultRole: "user",
+      roles,
+      displayName: "Test participant",
+      locale: "en",
+      avatarUrl: "",
+      createdAt: "",
+      phoneNumberVerified: false,
+      metadata: {},
+    },
+  };
+}
+function setup(storage = new MemoryStorage()) {
+  const client = createNhostClient({ storage, configure: [] });
+  const queries = createQueryClient();
+  const store = new AuthStore(client, queries);
+  return { client, queries, store };
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+const reply = (body: Session) => ({ body, status: 200, headers: new Headers() });
+function sessionLocks() {
+  let tail = Promise.resolve();
+  const request = vi.fn((_name: string, _options: unknown, action: () => Promise<void>) => {
+    const task = tail.then(action);
+    tail = task.catch(() => {});
+    return task;
+  });
+  vi.stubGlobal("navigator", { locks: { request }, onLine: true });
+  return request;
+}
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe("auth lifecycle", () => {
+  it("normalizes email and accepts only exact company addresses", () => {
+    expect(normalizeEmail("  PERSON@NHOST.IO  ")).toBe("person@nhost.io");
+    expect(companyEmail("  PERSON@NHOST.IO ")).toBe(true);
+    for (const value of [
+      "person@sub.nhost.io",
+      "person@nhost.io.evil.test",
+      "person@nhоst.io",
+      "a@@nhost.io",
+      "a b@nhost.io",
+      "outside@example.com",
+    ])
+      expect(companyEmail(value)).toBe(false);
+  });
+  it("does not admit unverified, anonymous, non-user or external sessions", () => {
+    const { client } = setup();
+    for (const patch of [
+      { emailVerified: false },
+      { isAnonymous: true },
+      { defaultRole: "facilitator" },
+      { email: "a@other.test" },
+      { roles: ["me"] },
+    ]) {
+      const session = testSession();
+      Object.assign(session.user ?? {}, patch);
+      client.sessionStorage.set(session);
+      expect(eligible(client.getUserSession())).toBe(false);
+    }
+  });
+  it("restores through refresh and clears private queries on identity/role changes, but not token rotation", async () => {
+    const { client, queries, store } = setup();
+    client.sessionStorage.set(testSession());
+    vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      expect(store.getSnapshot().ready).toBe(true);
+      const generation = store.getSnapshot().generation;
+      const key = authQueryKey(generation, "first", "user");
+      queries.setQueryData(key, "private draft response");
+      client.sessionStorage.set(testSession());
+      expect(queries.getQueryData(key)).toBe("private draft response");
+      client.sessionStorage.set(testSession("first", ["facilitator", "user", "me"]));
+      expect(queries.getQueryCache().getAll()).toHaveLength(0);
+      expect(store.getSnapshot().generation).toBe(generation + 1);
+      client.sessionStorage.set(testSession("second"));
+      expect(store.getSnapshot().generation).toBe(generation + 2);
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it.each([
+    new TypeError("Network unavailable"),
+    new DOMException("Timed out", "TimeoutError"),
+    { status: 503 },
+    { status: 429 },
+  ])(
+    "retains valid sessions and private queries on transient refresh failure (%s), then retries",
+    async (error) => {
+      vi.useFakeTimers();
+      const { client, store, queries } = setup();
+      client.sessionStorage.set(testSession());
+      const refresh = vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+      const stop = store.start();
+      try {
+        await store.refresh();
+        const generation = store.getSnapshot().generation;
+        queries.setQueryData(["private"], "still authorized");
+        refresh.mockRejectedValueOnce(error);
+        window.dispatchEvent(new Event("focus"));
+        await store.refresh();
+        expect(store.getSnapshot().session?.user?.id).toBe("first");
+        expect(store.getSnapshot().notice).toContain("retry automatically");
+        expect(store.getSnapshot().generation).toBe(generation);
+        expect(queries.getQueryData(["private"])).toBe("still authorized");
+        expect(client.getUserSession()).not.toBeNull();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(refresh).toHaveBeenCalledTimes(3);
+        expect(store.getSnapshot().notice).toBe("");
+        expect(store.getSnapshot().generation).toBe(generation);
+      } finally {
+        stop();
+        queries.clear();
+      }
+    },
+  );
+  it.each([
+    new TypeError("Offline"),
+    new DOMException("Timed out", "TimeoutError"),
+    { status: 503 },
+    { status: 429 },
+  ])(
+    "retains refresh credentials at JWT expiry (%s), pauses data once and recovers",
+    async (error) => {
+      vi.useFakeTimers();
+      const { client, store, queries } = setup();
+      client.sessionStorage.set(testSession());
+      const expires = client.getUserSession()?.decodedToken.exp ?? 0;
+      const refresh = vi.spyOn(client.auth, "refreshToken").mockRejectedValue(error);
+      const forget = vi.spyOn(client, "clearSession");
+      const stop = store.start();
+      try {
+        await store.refresh();
+        expect(store.getSnapshot().ready).toBe(true);
+        expect(store.getSnapshot().session?.user?.id).toBe("first");
+        expect(store.getSnapshot().canQuery).toBe(true);
+        const generation = store.getSnapshot().generation;
+        queries.setQueryData(["private"], "old identity");
+        const clear = vi.spyOn(queries, "clear");
+        vi.setSystemTime(expires);
+        await store.refresh();
+        expect(client.getUserSession()).not.toBeNull();
+        expect(store.getSnapshot().session?.user?.id).toBe("first");
+        expect(store.getSnapshot().canQuery).toBe(false);
+        expect(store.getSnapshot().generation).toBe(generation + 1);
+        expect(store.getSnapshot().notice).toContain("Reconnecting");
+        expect(queries.getQueryCache().getAll()).toHaveLength(0);
+        expect(clear).toHaveBeenCalledTimes(1);
+        // Backoff grows to ten seconds, never to a zero-delay loop at/after expiry.
+        for (const delay of [2000, 4000, 8000, 10_000, 10_000]) {
+          const calls = refresh.mock.calls.length;
+          await vi.advanceTimersByTimeAsync(delay - 1);
+          expect(refresh).toHaveBeenCalledTimes(calls);
+          await vi.advanceTimersByTimeAsync(1);
+          expect(refresh).toHaveBeenCalledTimes(calls + 1);
+          expect(store.getSnapshot().canQuery).toBe(false);
+          expect(store.getSnapshot().generation).toBe(generation + 1);
+          expect(client.getUserSession()).not.toBeNull();
+        }
+        expect(clear).toHaveBeenCalledTimes(1);
+        expect(forget).not.toHaveBeenCalled();
+        refresh.mockResolvedValue(reply(testSession()));
+        // Reconnection retries immediately, without another OTP or loss of account shell.
+        window.dispatchEvent(new Event("online"));
+        await store.refresh();
+        expect(store.getSnapshot().session?.user?.id).toBe("first");
+        expect(store.getSnapshot().canQuery).toBe(true);
+        expect(store.getSnapshot().notice).toBe("");
+        expect(store.getSnapshot().generation).toBe(generation + 2);
+        expect(client.getUserSession()).not.toBeNull();
+        expect(forget).not.toHaveBeenCalled();
+        // Successful refresh resets the retry backoff.
+        refresh.mockRejectedValueOnce(error);
+        await store.refresh();
+        const calls = refresh.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(refresh).toHaveBeenCalledTimes(calls + 1);
+        expect(store.getSnapshot().notice).toBe("");
+      } finally {
+        stop();
+        queries.clear();
+      }
+    },
+  );
+  it.each(["expired", "ineligible"])(
+    "forgets a %s session on an authoritative refresh rejection",
+    async (reason) => {
+      const { client, store, queries } = setup();
+      client.sessionStorage.set(testSession());
+      const refresh = vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+      const stop = store.start();
+      try {
+        await store.refresh();
+        queries.setQueryData(["private"], "old identity");
+        const session = testSession();
+        if (reason === "ineligible") Object.assign(session.user ?? {}, { emailVerified: false });
+        else {
+          const payload = { sub: "first", exp: Date.now() / 1000 - 1 };
+          session.accessToken = `e30.${btoa(JSON.stringify(payload))}.test`;
+        }
+        client.sessionStorage.set(session);
+        refresh.mockRejectedValue(reason === "expired" ? { status: 401 } : { status: 503 });
+        await store.refresh();
+        expect(client.getUserSession()).toBeNull();
+        expect(store.getSnapshot().session).toBeNull();
+        expect(store.getSnapshot().canQuery).toBe(false);
+        expect(queries.getQueryCache().getAll()).toHaveLength(0);
+      } finally {
+        stop();
+        queries.clear();
+      }
+    },
+  );
+  it("rejects a delayed verification after signout even if transport ignores abort", async () => {
+    const { client, store } = setup();
+    const delayed = deferred<{ body: { session: Session }; status: number; headers: Headers }>();
+    const verify = vi.spyOn(client.auth, "verifySignInOTPEmail").mockReturnValue(delayed.promise);
+    const stop = store.start();
+    try {
+      const result = store.verify("first@nhost.io", "123456").catch((error) => error.name);
+      await store.signOut();
+      expect(verify.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+      delayed.resolve({ body: { session: testSession() }, status: 200, headers: new Headers() });
+      expect(await result).toBe("AbortError");
+      expect(client.getUserSession()).toBeNull();
+      expect(store.getSnapshot().session).toBeNull();
+    } finally {
+      stop();
+    }
+  });
+  it("does not accept a delayed refresh after signout or overwrite a cross-tab account change", async () => {
+    const { client, store } = setup();
+    client.sessionStorage.set(testSession());
+    const delayed = deferred<ReturnType<typeof reply>>();
+    vi.spyOn(client.auth, "refreshToken").mockReturnValue(delayed.promise);
+    vi.spyOn(client.auth, "signOut").mockResolvedValue({
+      body: "OK",
+      status: 200,
+      headers: new Headers(),
+    });
+    const stop = store.start();
+    try {
+      await store.signOut();
+      client.sessionStorage.set(testSession("second"));
+      window.dispatchEvent(new StorageEvent("storage", { key: "nhostSession" }));
+      delayed.resolve(reply(testSession()));
+      await delayed.promise;
+      await Promise.resolve();
+      expect(store.getSnapshot().session?.user?.id).toBe("second");
+    } finally {
+      stop();
+    }
+  });
+  it("serializes signout after a cross-tab rotation, suppresses storage sync and revokes the rotated token", async () => {
+    const locks = sessionLocks();
+    const storage = new MemoryStorage();
+    const first = setup(storage);
+    const second = setup(storage);
+    first.client.sessionStorage.set(testSession());
+    vi.spyOn(first.client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+    const stopFirst = first.store.start();
+    await first.store.refresh();
+    first.queries.setQueryData(["private"], "old account");
+    const started = deferred<void>();
+    const delayed = deferred<ReturnType<typeof reply>>();
+    vi.spyOn(second.client.auth, "refreshToken").mockImplementation(() => {
+      started.resolve();
+      return delayed.promise;
+    });
+    const revoke = vi.spyOn(first.client.auth, "signOut").mockResolvedValue({
+      body: "OK",
+      status: 200,
+      headers: new Headers(),
+    });
+    const stopSecond = second.store.start();
+    const rotated = { ...testSession(), refreshToken: "rotated-test-only" };
+    let suppressedRotation = false;
+    const unsubscribe = second.client.sessionStorage.onChange((session) => {
+      if (session) {
+        // Deliver the rotation before the original signout storage event, the race under test.
+        window.dispatchEvent(new StorageEvent("storage", { key: "nhostSession" }));
+        suppressedRotation = first.store.getSnapshot().session === null;
+      }
+    });
+    try {
+      await started.promise;
+      const signingOut = first.store.signOut();
+      expect(first.store.getSnapshot().session).toBeNull();
+      expect(first.queries.getQueryCache().getAll()).toHaveLength(0);
+      expect(revoke).not.toHaveBeenCalled();
+      delayed.resolve(reply(rotated));
+      await signingOut;
+      expect(suppressedRotation).toBe(true);
+      expect(revoke.mock.calls[0]?.[0]?.refreshToken === rotated.refreshToken).toBe(true);
+      expect(first.client.getUserSession()).toBeNull();
+      window.dispatchEvent(new StorageEvent("storage", { key: "nhostSession" }));
+      expect(second.store.getSnapshot().session).toBeNull();
+      expect(locks.mock.calls.every(([name]) => name === "nhostSessionLock")).toBe(true);
+    } finally {
+      unsubscribe();
+      stopFirst();
+      stopSecond();
+    }
+  });
+  it("does not rotate a token when another tab’s signout acquired the lock first", async () => {
+    sessionLocks();
+    const storage = new MemoryStorage();
+    const first = setup(storage);
+    first.client.sessionStorage.set(testSession());
+    vi.spyOn(first.client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+    const stopFirst = first.store.start();
+    await first.store.refresh();
+    const started = deferred<void>();
+    const delayed = deferred<{ body: "OK"; status: number; headers: Headers }>();
+    vi.spyOn(first.client.auth, "signOut").mockImplementation(() => {
+      started.resolve();
+      return delayed.promise;
+    });
+    const second = setup(storage);
+    const refresh = vi.spyOn(second.client.auth, "refreshToken");
+    const signingOut = first.store.signOut();
+    await started.promise;
+    const stopSecond = second.store.start();
+    try {
+      const refreshing = second.store.refresh();
+      delayed.resolve({ body: "OK", status: 200, headers: new Headers() });
+      await Promise.all([signingOut, refreshing]);
+      expect(refresh).not.toHaveBeenCalled();
+      expect(second.store.getSnapshot().session).toBeNull();
+      expect(first.client.getUserSession()).toBeNull();
+    } finally {
+      stopFirst();
+      stopSecond();
+    }
+  });
+  it("cross-tab signout cancels/removes old private queries without triggering refresh ping-pong", async () => {
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession());
+    const refresh = vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      queries.setQueryData(["private"], "old identity");
+      client.clearSession();
+      window.dispatchEvent(new StorageEvent("storage", { key: "nhostSession" }));
+      expect(store.getSnapshot().session).toBeNull();
+      expect(queries.getQueryCache().getAll()).toHaveLength(0);
+      expect(refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      stop();
+    }
+  });
+  it("cleans an invalid refresh and reports network/429/invalid-code failures without raw engine errors", async () => {
+    expect(authMessage({ status: 429, body: "private error" })).toContain("Too many attempts");
+    expect(authMessage(new TypeError("secret"))).toContain("connect");
+    expect(authMessage({ status: 400 }, true)).toContain("expired or already used");
+    const { client, store } = setup();
+    client.sessionStorage.set(testSession());
+    vi.spyOn(client.auth, "refreshToken").mockRejectedValue({ status: 401 });
+    const stop = store.start();
+    try {
+      await store.refresh();
+      expect(client.getUserSession()).toBeNull();
+      expect(store.getSnapshot().ready).toBe(true);
+    } finally {
+      stop();
+    }
+  });
+});

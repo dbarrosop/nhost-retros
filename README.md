@@ -1,17 +1,17 @@
 # Retro
 
 A calm retrospective workspace for the Nhost team. Built with React, TypeScript,
-TanStack Router and TanStack Query, with Nhost as the planned backend.
+TanStack Router and TanStack Query, backed by Nhost Auth and GraphQL.
 
 ## Current slice
 
-The welcome screen is implemented, including responsive dark styling, reflection
-prompts, keyboard navigation and a not-found route. It is a **welcome preview**:
-sign-in, sessions, private answers and facilitator tools are not available yet.
-The prompts are editorial content, not real participant answers. No backend
-connection, credentials or running Nhost stack is needed to view it. Guarded
-backend and desktop/mobile browser acceptance infrastructure is now available;
-it does not add sign-in or application-data permissions.
+Verified company OTP signup/sign-in, session restoration, cross-tab signout and
+an authenticated account shell are implemented alongside the responsive welcome
+screen. Only exact `@nhost.io` addresses are admitted; no password UI exists.
+Trusted local operators can grant/revoke global facilitator membership. Sessions,
+private answers and clustering arrive in later slices; **no application-data
+permissions exist yet**. Welcome prompts are editorial, not participant content.
+The welcome screen alone needs no backend; signing in needs the local Nhost stack.
 
 ## Local development
 
@@ -31,14 +31,16 @@ strict port, after `pnpm build` and with the dev server stopped.
 
 ### Public configuration
 
-`frontend/.env.example` documents the future Auth and explicit canonical GraphQL
-(Constellation) public URLs. Copy it to `frontend/.env.local` when the auth slice
-needs configuration; the current welcome preview does not consume those values.
+`frontend/.env.example` documents Auth and the explicit canonical GraphQL
+(Constellation) public URLs. Copy it to `frontend/.env.local` for the existing
+HTTPS developer stack; the example defaults are also used when unset. For the
+isolated stack, the E2E runner supplies its actual public URLs automatically.
 **All `VITE_*` values are public browser inputs. Never add admin secrets, JWT signing
 keys, database passwords or SMTP credentials.** Local environment files are ignored.
 
-The existing developer backend is not disposable. These commands do not touch
-Docker, Auth data, database volumes, migrations or metadata. Integration commands
+The existing developer backend is not disposable. Installing/serving does not
+reset Docker, database volumes, migrations or metadata. Explicit signup/sign-in
+naturally writes Auth accounts/sessions on the configured backend. Integration commands
 below provision a **separate disposable project**; never reset `backend-*`.
 
 ## Checks
@@ -52,9 +54,9 @@ nix flake check
 ```
 
 `pnpm format` applies Biome formatting, import organization and safe fixes. Tests
-use Vitest, jsdom and Testing Library to exercise real routes, the welcome screen,
-in-page navigation, keyboard skip-link order and not-found recovery. Backend
-unit tests exercise target guards, occupied ports, budgets and metadata loading.
+use Vitest, jsdom and Testing Library to exercise routes, OTP forms, guarded access,
+auth generations and late-response rejection. Backend unit tests exercise target
+guards, operator loopback connections, occupied ports, budgets and metadata loading.
 CI also provisions the isolated stack and executes the real-JWT, scratch-migration
 and Playwright gates, with matching Nix browsers.
 

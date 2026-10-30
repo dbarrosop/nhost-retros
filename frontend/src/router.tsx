@@ -6,9 +6,13 @@ import {
   Outlet,
   type RouterHistory,
 } from "@tanstack/react-router";
+import { AuthPage } from "./features/auth/AuthPage";
+import { Workspace } from "./features/auth/Workspace";
+import { useAuth } from "./lib/auth";
 import { Welcome } from "./Welcome";
 
 function Layout() {
+  const { session } = useAuth();
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -35,6 +39,9 @@ function Layout() {
         <nav aria-label="Main navigation">
           <Link className="quiet-link" to="/" hash="how-it-works">
             The approach <span aria-hidden="true">↗</span>
+          </Link>
+          <Link className="quiet-link" to={session ? "/workspace" : "/auth"}>
+            {session ? "Your workspace" : "Sign in"}
           </Link>
         </nav>
       </header>
@@ -66,7 +73,17 @@ const welcomeRoute = createRoute({
   path: "/",
   component: Welcome,
 });
-const routeTree = rootRoute.addChildren([welcomeRoute]);
+const authRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/auth",
+  component: AuthPage,
+});
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/workspace",
+  component: Workspace,
+});
+const routeTree = rootRoute.addChildren([welcomeRoute, authRoute, workspaceRoute]);
 
 export function createAppRouter(history?: RouterHistory) {
   return createRouter({

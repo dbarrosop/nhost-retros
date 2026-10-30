@@ -157,6 +157,33 @@ export async function migrationRoundtrip(target: Target) {
         const all = migrations();
         for (const migration of all) await scratch.query(migration.up);
         const after = normalized(dump(target, name));
+        const roleMigration = all.find((migration) => migration.name.endsWith("_facilitator_role"));
+        if (roleMigration) {
+          const user = await scratch.query(
+            "INSERT INTO auth.users(email,locale,default_role) VALUES('scratch-role@nhost.io','en','user') RETURNING id",
+          );
+          await scratch.query(
+            "INSERT INTO auth.user_roles(user_id,role) VALUES($1,'facilitator')",
+            [user.rows[0].id],
+          );
+          let refused = false;
+          try {
+            await scratch.query(roleMigration.down);
+          } catch {
+            refused = true;
+          }
+          assert(refused, "Migration role down must refuse existing facilitator grants");
+          assert(
+            (
+              await scratch.query(
+                "SELECT 1 FROM auth.user_roles WHERE user_id=$1 AND role='facilitator'",
+                [user.rows[0].id],
+              )
+            ).rowCount === 1,
+            "Migration role down silently removed a grant",
+          );
+          await scratch.query("DELETE FROM auth.users WHERE id=$1", [user.rows[0].id]);
+        }
         for (const migration of [...all].reverse()) await scratch.query(migration.down);
         assert(
           normalized(dump(target, name)) === before,

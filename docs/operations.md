@@ -103,12 +103,14 @@ failure and drops **only** the minted scratch database. Neither live API databas
 receives `down.sql`. Database identifiers are allowlisted random names and quoted
 with pg's identifier escaper (Postgres does not accept parameters for identifiers).
 
-There are currently **zero application migrations/roles**. This is an exercised
-Auth baseline/roundtrip/cleanup gate, not a claim that future role/content migrations
-or grant-refusal tests have passed. Add their assertions when those migrations
-are introduced. Before app permissions exist, Hasura's user query schema contains
-only `no_queries_available`; Constellation explicitly reports no schema for user.
-The real-JWT harness checks those exact contracts without adding fake app access.
+The first migration registers `facilitator` in `auth.roles`, granting nobody
+membership. Scratch checks exercise up/down/up and prove down refuses an existing
+grant without removing it. Before app permissions exist, Hasura's role query schema
+contains only `no_queries_available`; Constellation explicitly reports no role
+schema. The real-JWT harness checks `user`, `me` and provisioned `facilitator`
+contracts without adding fake app access. Live data-layer revocation checks arrive
+with app permissions in the next slice; old JWT role claims themselves cannot be
+rewritten by a SQL revoke.
 
 ## Auth fixture and rate budgets
 
@@ -143,6 +145,20 @@ users are removed after checks. Future non-OTP browser journeys should seed the
 SDK session in memory from these fixtures; only dedicated OTP journeys spend the
 separate email budget. Mailhog is isolated in this test project, not external SMTP.
 
+OTP acceptance now uses real signup/sign-in/verification and Mailhog on desktop
+and mobile. Each browser group spends three email-path requests and five
+sign-in/verify requests (signup, wrong code, resend, verification, later sign-in).
+Auth policy groups are separate: seven email paths for rejected domains/role
+requests plus unknown-account sign-in; two email paths/five sign-in/verify requests
+for wrong/expired/reused-code and metadata-escalation checks. Disabled-account
+refresh, fake facilitator headers and grant/revoke JWT refreshes are also tested.
+Role-header denial probes use `__typename`, not an inaccessible table (which can
+fail even when the role is accepted). They require Hasura's `access-denied` code
+and Constellation HTTP 401, with accepted user/granted-facilitator controls.
+Before app permissions exist, accepted Constellation roles return HTTP 200 with
+`no schema available for role: <role>`; that is distinct from role denial.
+All groups remain sequential and fail unexpected 429s.
+
 Public test URLs are supplied explicitly as `VITE_NHOST_AUTH_URL` and
 `VITE_NHOST_GRAPHQL_URL` by `pnpm test:e2e`; no admin/key/password is sent to Vite.
 The browser uses Chromium's local host-resolver mapping for `*.local.nhost.run`,
@@ -173,6 +189,63 @@ used only for this loopback disposable stack; the developer HTTPS stack is uncha
 - Nhost/SQL subprocess output is intentionally withheld because it can echo
   credentials. Inspect only the restricted local state when diagnosing failures;
   never paste secrets, Compose config or JWT-bearing logs into reports/artifacts.
+
+## Accounts and trusted local facilitator provisioning
+
+Use **Create account** on the sign-in page for a new company account, then enter
+the six-digit email code. **Sign in** never creates accounts implicitly. Emails
+are trimmed/lowercased; exact-domain checks run in the form and Auth. There is no
+password/reset/OAuth surface. A 30-second browser resend cooldown is a usability
+aid, not a security boundary: server rate limits remain unchanged. Wrong, expired
+and used codes retain the input and offer resend. Session tokens live only in SDK
+session storage; no private Query cache is persisted. Signing out immediately
+clears local access and caches; a failed server revoke is explicitly reported.
+Only a 401 refresh rejection or an ineligible session deletes the stored session,
+matching the SDK's refresh behavior. Network errors, timeouts, 5xx and 429 retain
+its refresh token even after JWT expiry: the account shell stays visible with a
+reconnecting notice, while expired-JWT private queries are canceled/cleared once
+and `canQuery` becomes false until a successful refresh. Retry backoff doubles
+from one second to a ten-second cap; online/focus/visibility events can retry
+immediately. An unexpired eligible JWT keeps its existing queries during transient
+failures. Explicit **Sign out** is the way to forget this browser's session.
+
+The isolated Mailhog URL is recorded under `endpoints.mail` in the non-secret
+`.local-test/target.json`. Never use external SMTP for local acceptance. Auth
+0.52.0 intentionally returns HTTP 200 for unknown-account OTP sign-in; assertions
+must check **no session and no new DB row**, not require a 4xx. Mailhog HTML has
+six-digit CSS colors, so extract an OTP only from standalone element text, never
+the first six-digit substring. These are measured pinned-version behaviors.
+
+After applying the checked-in role migration to the chosen local backend, a
+trusted SQL operator can run these commands from repo root:
+
+```sh
+# Identity-verified registered disposable target; credentials loaded privately:
+pnpm facilitator grant <account-uuid> --test-target
+pnpm facilitator revoke <account-uuid> --test-target
+
+# Explicit local developer database (no reset and never used by test runners):
+# First load FACILITATOR_DATABASE_URL securely into this process environment.
+pnpm facilitator grant <account-uuid> --local-database
+pnpm facilitator revoke <account-uuid> --local-database
+```
+
+`FACILITATOR_DATABASE_URL` is a privileged **non-VITE** PostgreSQL URL with SQL user,
+database and optional password/port. It must name localhost/127.0.0.1/::1 directly;
+query overrides, remote hosts and alternate protocols are refused. `localhost` is
+pinned to loopback, not DNS. Do not paste credential assignments into shared logs
+or commit them. The command prints only the operation result, not account emails
+or connection values. It changes only the requested role membership, in a
+transaction with a locked account row; it never resets accounts or volumes.
+
+Grant requires an existing verified, enabled, non-anonymous exact-domain account,
+default role `user` and ordinary user membership. Grants/revokes are idempotent;
+revocation still works after eligibility is lost. The command never changes the
+default role or accepts user metadata as authority. `facilitator` is not in the
+signup-requestable roles. Refresh/re-sign-in (or focus the existing SPA) to obtain
+new JWT claims; the account shell shows confirmed membership, with no unfinished
+board controls. Production provisioning/deployment remains deferred. Tests touch
+only the separately registered disposable database, never the developer stack.
 
 ## Production (deferred)
 
