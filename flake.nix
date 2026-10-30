@@ -8,11 +8,11 @@
   };
 
   outputs =
-    {
-      self,
-      nixops,
-      nixpkgs,
-      flake-utils,
+    { self
+    , nixops
+    , nixpkgs
+    , flake-utils
+    ,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -54,6 +54,18 @@
       in
       {
         checks = {
+          biome-version = pkgs.runCommand "check-biome-version"
+            {
+              npmVersion = (builtins.fromJSON (builtins.readFile ./package.json)).devDependencies."@biomejs/biome";
+              nixVersion = pkgs.nhost.biome.version;
+              schema = (builtins.fromJSON (builtins.readFile ./biome.json))."$schema";
+            }
+            ''
+              test "$npmVersion" = "$nixVersion"
+              test "$schema" = "https://biomejs.dev/schemas/$nixVersion/schema.json"
+              mkdir "$out"
+            '';
+
           nixpkgs-fmt =
             pkgs.runCommand "check-nixpkgs-fmt"
               {
@@ -71,6 +83,9 @@
 
         devShells = flake-utils.lib.flattenTree {
           default = pkgs.mkShell {
+            # The npm wrapper honors this; generic Linux ELF binaries cannot run on NixOS.
+            BIOME_BINARY = "${pkgs.nhost.biome}/bin/biome";
+
             buildInputs =
               with pkgs;
               [

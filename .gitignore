@@ -1,1 +1,21 @@
 .nhost-code
+
+# Dependencies, builds and tool caches
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+.pnpm-store/
+.direnv/
+
+# Local configuration and private/runtime state
+.env
+.env.*
+!.env.example
+.secrets
+.secrets.*
+!.secrets.example
+*.log
+playwright-report/
+test-results/

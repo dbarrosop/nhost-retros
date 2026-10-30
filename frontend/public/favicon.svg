@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <title>Retro</title>
+  <rect width="40" height="40" rx="12" fill="#c4e8cf"/>
+  <path d="M12 12h16v12l-4 4H12z" fill="none" stroke="#172c20" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M24 28v-4h4M16 17h8M16 21h5" fill="none" stroke="#172c20" stroke-width="2" stroke-linecap="round"/>
+</svg>

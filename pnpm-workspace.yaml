@@ -1,0 +1,4 @@
+packages:
+  - frontend
+
+# backend/functions is an unused, independent scaffold, not an app workspace.
