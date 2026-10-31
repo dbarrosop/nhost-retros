@@ -42,14 +42,17 @@ browsers or port 5173 cause failure. Playwright owns a finite Vite subprocess,
 never attaches to an existing dev server, and shuts Vite down after the suite.
 Stop `pnpm dev` before E2E. Each final desktop/mobile engine run took 3.9 minutes;
 Playwright retains its eight-minute global timeout inside the ten-minute outer
-runner cap, with no extra browser cases added by developer setup. Hosted CI uses
-native Node/pnpm, the checksum-pinned
-CLI installer in `scripts/install-ci-tools.sh` and npm Playwright's matching
-Chromium/headless shell, not `nix develop`. This avoids compiling the development
-shell's Node/toolchain closure on a cold runner within the acceptance timeout.
-The native CLI archives use the same 1.51.2 digests as the locked Nix input; arm64
-installation and the amd64 archive checksum were validated locally. Hosted
-execution remains unperformed. Nix formatting/version checks remain a separate job.
+runner cap, with no extra browser cases added by developer setup. Frontend and
+acceptance CI jobs install Nix and run every install/check/test/cleanup command
+through `nix develop -c ...`. The locked flake supplies Node, pnpm, Biome, Nhost CLI
+and Playwright's matching Chromium/headless shell, including its browser-path
+and runtime-library configuration. No Node/pnpm setup actions, native CLI
+installer or separate Playwright browser download are used in CI.
+These jobs allow 90 minutes for cold Nix realization plus the tests; this is a
+job budget, not a measured cold-run duration. Toolchain caching can be configured
+without changing the flake-backed execution path or duplicating version pins.
+Hosted execution remains unperformed. Nix formatting/version checks remain a
+separate job.
 If `nix flake check` reports `running 0 flake checks`, also build the named gates
 to verify the derivations, not just successful evaluation. For an aarch64 Linux
 host (substitute your host system on other architectures):

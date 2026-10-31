@@ -162,11 +162,13 @@ passed; an empty LSP result is not used as proof of correctness.
 
 CI is configured with independent fresh-stack Hasura/Constellation browser lanes,
 full dual-engine backend/migration suites, frontend static/unit/build gates and
-explicit named x86_64-linux Nix check builds. YAML and command/matrix contracts
-were validated locally. Hosted acceptance now uses native pinned tools instead
-of cold-building `nix develop`: the arm64 CLI installer ran successfully and the
-amd64 release archive checksum was verified. npm Playwright supplies matching
-browsers; the separate Nix job remains. Hosted CI and production acceptance were
-not executed.
+explicit named x86_64-linux Nix check builds. Frontend and acceptance commands now
+run through `nix develop`, using the same locked toolchain and Nix Playwright
+browsers as the local runs above. The separate native CI installer and browser
+download path were removed; the earlier cold-build concern is handled with a
+90-minute job budget instead of a second toolchain. YAML and command/matrix
+contracts are checked locally. This workflow correction does not claim a hosted
+CI run or a new browser-suite run; hosted CI and production acceptance remain
+unexecuted.
 Production operator inputs and safe rollback/retention requirements are listed
 in [operations](operations.md#production-checklist-deferred-not-a-deployment-command).

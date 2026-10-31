@@ -10,22 +10,21 @@ permissions:
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm --filter @retro/frontend build
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop -c pnpm install --frozen-lockfile
+      - run: nix develop -c pnpm lint
+      - run: nix develop -c pnpm typecheck
+      - run: nix develop -c pnpm test
+      - run: nix develop -c pnpm --filter @retro/frontend build
 
   acceptance:
     needs: frontend
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Allow cold realization of the pinned Nix shell, not a second toolchain.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -33,30 +32,23 @@ jobs:
     name: Acceptance (${{ matrix.graphql-engine }})
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - uses: pnpm/action-setup@v4
-      - run: pnpm install --frozen-lockfile
-      # Pinned native tools avoid cold source builds of the Nix dev shell.
-      - run: bash scripts/install-ci-tools.sh
-      - run: >-
-          pnpm --filter @retro/frontend exec playwright install
-          --with-deps chromium
+      - uses: cachix/install-nix-action@v31
+      - run: nix develop -c pnpm install --frozen-lockfile
+      # The flake supplies Node, pnpm, Biome, Nhost CLI and matching Chromium.
       # Generated secrets/registration stay in restricted, ignored .local-test.
-      - run: pnpm test:target provision
-      - run: pnpm test:target health
-      - run: pnpm test:migrations
-      - run: pnpm test:backend
+      - run: nix develop -c pnpm test:target provision
+      - run: nix develop -c pnpm test:target health
+      - run: nix develop -c pnpm test:migrations
+      - run: nix develop -c pnpm test:backend
       # API permissions run on BOTH engines; browser journeys use this lane.
       # No secrets or private artifacts are uploaded.
       - run: >-
-          pnpm test:e2e
+          nix develop -c pnpm test:e2e
           --engine "${{ matrix.graphql-engine }}"
       - if: always()
         run: |
           if test -f .local-test/target.json; then
-            pnpm test:target destroy
+            nix develop -c pnpm test:target destroy
           fi
 
   nix:

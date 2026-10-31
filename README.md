@@ -105,8 +105,10 @@ long-text/mobile layout and axe checks without serious/critical findings. Contro
 connections prove both closure lock orders and rollback behavior. Backend unit tests exercise target
 guards, operator loopback connections, occupied ports, budgets and metadata loading.
 CI also provisions the isolated stack and executes the real-JWT, scratch-migration
-and Playwright gates. Hosted acceptance uses pinned native CLI/Node/pnpm and
-npm-matched browsers to avoid cold Nix source builds; local Nix remains supported.
+and Playwright gates. Frontend and acceptance jobs run through `nix develop` using
+the same pinned Node, pnpm, Biome, Nhost CLI and Chromium as local development.
+There is no separate CI tool installer or browser download; the flake is the
+shared toolchain source of truth.
 
 ### Disposable backend and browser acceptance
 

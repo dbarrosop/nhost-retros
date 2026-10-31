@@ -413,12 +413,13 @@
   mirroring is pending. Regression tests cover both history directions and
   missing/ambiguous/dirty CLI status before any DB connection or backup.
   The parent owns starting the persistent frontend after review.
-- **Use native tools for hosted acceptance; keep Nix as a separate gate.** A cold
-  `nix develop` could source-build the development toolchain before any acceptance
-  test ran. Hosted lanes now use Node/pnpm pins, checksum-pinned official CLI
-  archives matching the locked flake and npm-matched Playwright browsers.
-  The arm64 installer and amd64 archive digest were validated locally; no hosted
-  execution or deployment was claimed. Local Nix workflows remain unchanged.
+- **Use the flake for hosted and local toolchains.** Frontend and acceptance CI
+  commands run through `nix develop`, including browser execution and target
+  cleanup. Node, pnpm, Biome, Nhost CLI and matching Chromium come from the locked
+  flake. The earlier native-installer workaround was reverted: a predicted cold
+  build delay did not justify a parallel CI toolchain. The jobs now allow 90
+  minutes for cold realization and testing; caching can improve that path without
+  bypassing Nix. No hosted execution or deployment is claimed.
 - **Connectivity is one optimistic event model.** Auth, activity notices, reads
   and mutation guards now share TanStack `onlineManager`, initially online and
   driven by browser events rather than `navigator.onLine`. A false LAN hint must
@@ -428,8 +429,9 @@
   are unchanged. Regression tests cover cold restoration, refresh retry,
   foreground reads and fresh card/board writes under that false hint.
 - **Final handoff scope expansion was explicit.** Parent-requested developer
-  readiness, native hosted tooling and carried-forward connectivity hardening
-  extend the initial Phase 9 runner/docs file list. They add no app service,
+  readiness and carried-forward connectivity hardening extend the initial
+  Phase 9 runner/docs file list. The native hosted-tooling variance was later
+  reverted in favor of the flake-backed CI path. They add no app service,
   deployment, production setting or persistent process. All suites were rerun;
   each engine's final browser run took 3.9 minutes, below the unchanged
   eight-minute global and ten-minute outer caps.
