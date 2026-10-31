@@ -35,6 +35,8 @@ export function TextForm({
   onSave,
   onCancel,
   onDirty,
+  failureMessage = changeFailed,
+  blocked = false,
 }: {
   label: string;
   maximum: number;
@@ -45,6 +47,8 @@ export function TextForm({
   onSave: (text: string) => Promise<unknown>;
   onCancel?: () => void;
   onDirty?: (dirty: boolean) => void;
+  failureMessage?: string;
+  blocked?: boolean;
 }) {
   const id = useId();
   const [value, setValue] = useState(initial);
@@ -54,7 +58,7 @@ export function TextForm({
     id,
     value,
     disabled,
-    readOnly: pending,
+    readOnly: pending || blocked,
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setValue(event.target.value);
       onDirty?.(Boolean(event.target.value));
@@ -68,7 +72,7 @@ export function TextForm({
       aria-busy={pending}
       onSubmit={async (event) => {
         event.preventDefault();
-        if (disabled || pending) return;
+        if (disabled || pending || blocked) return;
         setError("");
         let text: string;
         try {
@@ -82,7 +86,7 @@ export function TextForm({
           await onSave(text);
           setValue("");
         } catch {
-          setError(changeFailed);
+          setError(failureMessage);
         } finally {
           setPending(false);
         }
@@ -102,7 +106,12 @@ export function TextForm({
         <p className="field-hint">This session is read-only. Your unsaved draft is kept above.</p>
       )}
       <div className="action-row">
-        <button className="primary-link" disabled={disabled} aria-disabled={pending} type="submit">
+        <button
+          className="primary-link"
+          disabled={disabled}
+          aria-disabled={pending || blocked}
+          type="submit"
+        >
           {pending ? "Saving…" : submit}
         </button>
         {onCancel && (
@@ -122,6 +131,7 @@ export function ConfirmAction({
   onConfirm,
   afterConfirm,
   disabled = false,
+  failureMessage = changeFailed,
 }: {
   label: string;
   title: string;
@@ -129,6 +139,7 @@ export function ConfirmAction({
   onConfirm: () => Promise<unknown>;
   afterConfirm?: () => void;
   disabled?: boolean;
+  failureMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -149,6 +160,7 @@ export function ConfirmAction({
           description={description}
           label={label}
           disabled={disabled}
+          failureMessage={failureMessage}
           onConfirm={onConfirm}
           onClose={(confirmed) => {
             setOpen(false);
@@ -165,6 +177,7 @@ function Confirmation({
   description,
   label,
   disabled,
+  failureMessage,
   onConfirm,
   onClose,
 }: {
@@ -172,6 +185,7 @@ function Confirmation({
   description: string;
   label: string;
   disabled: boolean;
+  failureMessage: string;
   onConfirm: () => Promise<unknown>;
   onClose: (confirmed: boolean) => void;
 }) {
@@ -228,7 +242,7 @@ function Confirmation({
               await onConfirm();
               finish(true);
             } catch {
-              setError(changeFailed);
+              setError(failureMessage);
             } finally {
               setPending(false);
             }

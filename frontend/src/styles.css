@@ -865,3 +865,208 @@ dialog .dialog-description {
   border-top: 1px solid var(--border);
   padding-top: 0.5rem;
 }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.board-intro {
+  padding-block: 3rem 1rem;
+}
+.board-intro h1 {
+  margin-block: 1.25rem;
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1.25;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 55rem;
+}
+.board-help {
+  max-width: 52rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.8;
+}
+.board-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+  margin-top: 1.5rem;
+}
+.topic-column {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #151c18;
+  padding: 0.85rem;
+  transition: border-color 100ms;
+}
+.topic-column.drop-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px #c4e8cf33;
+}
+.topic-header {
+  padding: 0.5rem 0.25rem 1rem;
+}
+.topic-title-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: start;
+}
+.topic-title-row h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.topic-count {
+  border-radius: 20px;
+  border: 1px solid #4c5c50;
+  color: var(--muted);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  flex-shrink: 0;
+}
+.topic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.topic-actions .secondary-button {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.topic-actions .text-button {
+  font-size: 0.75rem;
+}
+.topic-header .text-form {
+  margin-top: 1rem;
+}
+.topic-cards {
+  display: grid;
+  gap: 0.85rem;
+  min-height: 8rem;
+}
+.column-empty {
+  border: 1px dashed #415046;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 2rem 1rem;
+  margin: 0;
+  line-height: 1.8;
+}
+.board-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #596451;
+  border-radius: 3px 12px 12px;
+  background: #2c3528;
+  box-shadow: 0 3px 8px #0002;
+}
+.board-card.tone-1 {
+  background: #382e29;
+  border-color: #70594a;
+}
+.board-card.tone-2 {
+  background: #283538;
+  border-color: #4c666c;
+}
+.board-card.dragging {
+  opacity: 0.35;
+}
+.board-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.card-number {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  color: #c2c9c4;
+  font-variant-numeric: tabular-nums;
+}
+.drag-handle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #788679;
+  border-radius: 6px;
+  color: var(--text);
+  background: #11161444;
+  font-size: 1.5rem;
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+.board-card .answer-text {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+.card-author h3 {
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+  overflow-wrap: anywhere;
+}
+.card-author p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #c2c9c4;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.move-control {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #78867966;
+}
+.move-control label {
+  font-size: 0.75rem;
+  color: #d5dbd5;
+}
+.move-control select {
+  min-height: 44px;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid #788679;
+  border-radius: 6px;
+  color: var(--text);
+  background: #1c2520;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
+.move-control select[aria-disabled="true"] {
+  opacity: 0.6;
+}
+.drag-preview {
+  max-height: 22rem;
+  overflow: hidden;
+  box-shadow: 0 12px 32px #0006;
+  border-color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .topic-column {
+    transition: none;
+  }
+}

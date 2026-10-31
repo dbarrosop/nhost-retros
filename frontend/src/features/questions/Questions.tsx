@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import type { AppRole } from "../../lib/retro-api";
 import { Answers } from "../answers/Answers";
@@ -117,6 +118,17 @@ function QuestionItem({
               setEditing(false);
             }}
           />
+        )}
+        {role === "facilitator" && (
+          <p>
+            <Link
+              className="quiet-link"
+              to="/facilitate/$sessionId/questions/$questionId"
+              params={{ sessionId: question.sessionId, questionId: question.id }}
+            >
+              Open reflection board for question {number} →
+            </Link>
+          </p>
         )}
         {role === "user" && (
           <Answers questionId={question.id} number={number} ended={ended} readOnly={readOnly} />

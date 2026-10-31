@@ -47,6 +47,7 @@ function setup(facilitator: boolean, path: string) {
   let ended = false;
   let affected = 1;
   let failedRead = false;
+  let failedSessionRead = false;
   let name = "October retrospective";
   const roles: string[] = [];
   const requests: { query: string; variables: Record<string, string> }[] = [];
@@ -74,12 +75,22 @@ function setup(facilitator: boolean, path: string) {
             : "insertRetroQuestions";
         return Response.json({ data: { [field]: { affected_rows: affected } } });
       }
-      return failedRead
+      return failedRead || (failedSessionRead && body.query.includes("query Session("))
         ? Response.json({ errors: [{ message: "private engine details" }] })
         : Response.json({
             data: body.query.includes("MyAnswers")
               ? { retroAnswers: [] }
-              : { retroSessions: [record] },
+              : body.query.includes("query QuestionBoard(")
+                ? {
+                    retroQuestions: [
+                      {
+                        id: questionId,
+                        topics: [{ id: "keep", name: "Keep" }],
+                        answers: [],
+                      },
+                    ],
+                  }
+                : { retroSessions: [record] },
           });
     }),
   );
@@ -105,6 +116,9 @@ function setup(facilitator: boolean, path: string) {
     failRead: () => {
       failedRead = true;
     },
+    setSessionReadError: (failed: boolean) => {
+      failedSessionRead = failed;
+    },
   };
 }
 afterEach(() => {
@@ -126,6 +140,49 @@ describe("authorized retrospective workspace", () => {
       }),
     ).not.toBeInTheDocument();
     expect(app.roles.every((role) => role === "user")).toBe(true);
+    app.queries.clear();
+  });
+  it("redirects participant board deep links before issuing any board request", async () => {
+    const app = setup(false, `/facilitate/${sessionId}/questions/${questionId}`);
+    await screen.findByRole("heading", { name: "Welcome to the team space." });
+    expect(app.requests.some((request) => request.query.includes("query QuestionBoard"))).toBe(
+      false,
+    );
+    expect(app.roles.every((role) => role === "user")).toBe(true);
+    app.queries.clear();
+  });
+  it("keeps the mounted board, focused control and topic drafts through session refetch failure and recovery", async () => {
+    const app = setup(true, `/facilitate/${sessionId}/questions/${questionId}`);
+    const user = userEvent.setup();
+    const board = await screen.findByRole("region", { name: "Reflection board" });
+    await user.type(screen.getByLabelText("New topic"), "My new theme draft");
+    await user.click(screen.getByRole("button", { name: "Rename topic Keep" }));
+    const rename = screen.getByLabelText("Rename topic Keep", { exact: true });
+    await user.clear(rename);
+    await user.type(rename, "My rename draft");
+    expect(rename).toHaveFocus();
+
+    app.setSessionReadError(true);
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn’t load this workspace");
+    expect(screen.getByRole("region", { name: "Reflection board" })).toBe(board);
+    expect(screen.getByLabelText("New topic")).toHaveValue("My new theme draft");
+    expect(rename).toHaveValue("My rename draft");
+    expect(rename).toHaveFocus();
+    expect(screen.queryByText("private engine details")).not.toBeInTheDocument();
+
+    app.setSessionReadError(false);
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByRole("region", { name: "Reflection board" })).toBe(board);
+    expect(screen.getByLabelText("New topic")).toHaveValue("My new theme draft");
+    expect(rename).toHaveValue("My rename draft");
+    expect(rename).toHaveFocus();
+    expect(app.roles.every((role) => role === "facilitator")).toBe(true);
     app.queries.clear();
   });
   it("sends explicit facilitator operations, validates text, and preserves dirty drafts across refetch/closure", async () => {

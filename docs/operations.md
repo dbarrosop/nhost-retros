@@ -273,8 +273,9 @@ closed session cannot be renamed, reopened or deleted, and its questions cannot
 be added/edited/deleted. Answer cards also become immutable. Database triggers lock
 before inspecting closure, so concurrent/stale API writes cannot bypass this rule.
 Empty-only deletion and restrictive foreign keys prevent accidental cascades.
-The facilitator-only grouping API is available before and after ending;
-the board UI is not yet implemented.
+The facilitator-only board is available from each question before and after
+ending. Use the grip to drag with mouse, touch or keyboard, or use the always
+available Move-to menu; topics remain editable after closure.
 
 The UI counts Unicode code points, not JavaScript UTF-16 length. SQL applies the
 same explicit whitespace trimming set: names allow 1–120 code points, questions
@@ -322,7 +323,8 @@ that assignment. Concurrent moves serialize, with the last successful write winn
 Refetch the board on errors/zero rows; do not automatically replay moves or parse
 Hasura/Constellation error strings. Crafted `on_conflict` is tested on both engines:
 only `topicId` is updateable, and the same composite integrity constraints apply.
-The browser board and its move feedback are the next slice, not a current UI.
+The browser board uses these explicit operations with pending state, authoritative
+refetch and sanitized failure feedback. Topic deletion requires confirmation.
 
 Answer-to-question and answer-to-author foreign keys are intentionally restrictive.
 Deleting an account with retained cards fails, even for a trusted SQL operator;
@@ -331,6 +333,8 @@ explicit, backed-up operator procedure, not trigger disabling in routine cleanup
 
 ### Browser harness pitfalls
 
+- Out-of-tree Playwright/Vitest harnesses need a neighboring `package.json` with
+  `"type": "module"` to match this repository's ESM setup.
 - Navigation completion is not session readiness: restoration waits for
   `nhostSessionLock` and a real `/token` response. In OTP tests, register the
   response waiter before reconnect/navigation, assert success/completion without

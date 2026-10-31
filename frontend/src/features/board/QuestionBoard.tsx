@@ -1,0 +1,340 @@
+import {
+  DndContext,
+  DragOverlay,
+  type KeyboardCoordinateGetter,
+  KeyboardSensor,
+  MouseSensor,
+  pointerWithin,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { Link } from "@tanstack/react-router";
+import { useLayoutEffect, useRef, useState } from "react";
+import { readFailed, requireAffected, useRetroApi, useRetroQuery } from "../../lib/retro-api";
+import { useSession } from "../sessions/api";
+import { TextForm } from "../sessions/controls";
+import { AnswerCard, dragControlId } from "./AnswerCard";
+import {
+  addTopic,
+  assignAnswer,
+  type Board,
+  type BoardAnswer,
+  type BoardResult,
+  boardQuery,
+  deleteTopic,
+  groupingFailed,
+  moveAnswer,
+  renameTopic,
+  ungroupAnswer,
+  ungrouped,
+} from "./api";
+import { moveControlId } from "./MoveAnswerControl";
+import { TopicColumn } from "./TopicColumn";
+
+// One arrow step per column, in DOM order, including a stacked mobile board.
+function boardCoordinates(targetId: { current: string | null }): KeyboardCoordinateGetter {
+  return (event, { context }) => {
+    const direction = ["ArrowRight", "ArrowDown"].includes(event.code)
+      ? 1
+      : ["ArrowLeft", "ArrowUp"].includes(event.code)
+        ? -1
+        : 0;
+    if (!direction || !context.collisionRect) return;
+    event.preventDefault();
+    const columns = context.droppableContainers.getEnabled();
+    const current = columns.findIndex((column) => column.id === targetId.current);
+    const target = columns[current + direction];
+    const rect = target && context.droppableRects.get(target.id);
+    if (!target || !rect) return;
+    targetId.current = String(target.id);
+    return { x: rect.left + 12, y: rect.top + 12 };
+  };
+}
+
+export function QuestionBoard({
+  sessionId,
+  questionId,
+}: {
+  sessionId: string;
+  questionId: string;
+}) {
+  const query = useSession("facilitator", sessionId);
+  const session = query.data?.retroSessions[0];
+  const question = session?.questions.find((q) => q.id === questionId);
+  return (
+    <>
+      <Link className="quiet-link" to="/facilitate/$sessionId" params={{ sessionId }}>
+        ← Back to session
+      </Link>
+      {query.isPending ? (
+        <p role="status">Loading the conversation…</p>
+      ) : query.isError && !session ? (
+        <p role="alert">{readFailed}</p>
+      ) : !question || !session ? (
+        <h1>Question unavailable</h1>
+      ) : (
+        <>
+          {query.isError && (
+            <p role="alert">{readFailed} Your board and topic drafts are kept below.</p>
+          )}
+          <div className="board-intro">
+            <p className="eyebrow">Facilitator board · {session.name}</p>
+            <span className={`session-status ${session.ended ? "ended" : ""}`}>
+              {session.ended ? "Ended" : "Active"}
+            </span>
+            <h1>{question.text}</h1>
+            <p className="hero-description">
+              Find the themes in your team’s reflections. Only trusted facilitators can see this
+              board and its authors.
+              {session.ended &&
+                " Answer content is permanently frozen; topics and grouping remain open."}
+            </p>
+          </div>
+          <BoardWorkspace sessionId={sessionId} questionId={questionId} />
+        </>
+      )}
+    </>
+  );
+}
+
+export function BoardWorkspace({
+  sessionId,
+  questionId,
+}: {
+  sessionId: string;
+  questionId: string;
+}) {
+  const query = useRetroQuery<BoardResult>(
+    "facilitator",
+    ["board", questionId, sessionId],
+    boardQuery,
+    { questionId, sessionId },
+  );
+  const api = useRetroApi("facilitator");
+  const [held, setHeld] = useState<Board | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const locked = useRef(false);
+  const keyboardTarget = useRef<string | null>(null);
+  const [focus, setFocus] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const board = held ?? query.data?.retroQuestions[0];
+  const busy = pending || query.isError || !api.enabled;
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: boardCoordinates(keyboardTarget),
+      scrollBehavior: "auto",
+    }),
+  );
+  useLayoutEffect(() => {
+    if (!held && focus) {
+      (document.getElementById(focus) ?? document.getElementById("board-heading"))?.focus();
+      setFocus(null);
+    }
+  }, [focus, held]);
+
+  async function change(document: string, variables: Record<string, unknown>, field: string) {
+    if (locked.current || !board || busy || !navigator.onLine) throw new Error(groupingFailed);
+    locked.current = true;
+    setPending(true);
+    setHeld(board);
+    try {
+      const result = await api.request<Record<string, { affected_rows: number }>>(
+        document,
+        variables,
+      );
+      requireAffected(result[field]);
+    } finally {
+      // Keep the displayed snapshot still until the authoritative replacement is ready.
+      if (navigator.onLine) await api.invalidate();
+      else void api.invalidate();
+      locked.current = false;
+      setPending(false);
+      setHeld(null);
+    }
+  }
+  const columnName = (id: string) =>
+    id === ungrouped ? "Ungrouped" : (board?.topics.find((t) => t.id === id)?.name ?? "a topic");
+  async function move(answer: BoardAnswer, target: string, control: "move" | "drag") {
+    setError("");
+    setNotice("");
+    const current = answer.assignment?.topicId ?? ungrouped;
+    const number = (board?.answers.findIndex((a) => a.id === answer.id) ?? 0) + 1;
+    const focusId = control === "move" ? moveControlId(answer.id) : dragControlId(answer.id);
+    try {
+      if (target !== current) {
+        if (target === ungrouped)
+          await change(ungroupAnswer, { answerId: answer.id }, "deleteRetroAnswerTopics");
+        else if (answer.assignment)
+          await change(
+            moveAnswer,
+            { answerId: answer.id, topicId: target },
+            "updateRetroAnswerTopics",
+          );
+        else
+          await change(
+            assignAnswer,
+            { answerId: answer.id, questionId, topicId: target },
+            "insertRetroAnswerTopics",
+          );
+        setNotice(`Card ${number} moved to ${columnName(target)}.`);
+      } else setNotice(`Card ${number} remains in ${columnName(current)}.`);
+    } catch {
+      setError(groupingFailed);
+      if (navigator.onLine) await api.invalidate();
+    } finally {
+      setHeld(null);
+      setFocus(focusId);
+    }
+  }
+  function cancelDrag() {
+    setFocus(dragging ? dragControlId(dragging) : "board-heading");
+    setDragging(null);
+    keyboardTarget.current = null;
+    setHeld(null);
+    setNotice("Move cancelled. No grouping changed.");
+    void api.invalidate();
+  }
+  const dragged = board?.answers.find((a) => a.id === dragging);
+  if (query.isPending) return <p role="status">Loading reflection cards…</p>;
+  if (!board)
+    return (
+      <p role="alert">
+        {query.isError
+          ? readFailed
+          : "This board is unavailable. Your access or this question may have changed."}
+      </p>
+    );
+  const columns = [{ id: ungrouped }, ...board.topics];
+  return (
+    <section className="question-board" aria-labelledby="board-heading" aria-busy={pending}>
+      <div className="section-heading">
+        <h2 id="board-heading" tabIndex={-1}>
+          Reflection board
+        </h2>
+        <span className="small-label">
+          {board.answers.length} {board.answers.length === 1 ? "card" : "cards"}
+        </span>
+      </div>
+      <p className="board-help" id="board-help">
+        Drag by the grip, or use each card’s Move-to menu. On a grip, press Space to pick up, arrow
+        keys to choose a column, Space to drop and Escape to cancel. On touch, hold the grip to
+        lift.
+      </p>
+      {query.isError && (
+        <p role="alert">{readFailed} Grouping is paused until the board reconnects.</p>
+      )}
+      {error && (
+        <p role="alert" className="form-error">
+          {error}
+        </p>
+      )}
+      <p role="status" aria-label="Board updates" className="form-status">
+        {pending ? "Saving grouping…" : notice}
+      </p>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={(args) => {
+          if (args.pointerCoordinates) return pointerWithin(args);
+          // Column centers are unreliable for a 4,000-character card beside an empty
+          // column. Keyboard navigation chooses a column explicitly, irrespective of size.
+          return keyboardTarget.current ? [{ id: keyboardTarget.current }] : [];
+        }}
+        accessibility={{
+          restoreFocus: false,
+          screenReaderInstructions: {
+            draggable:
+              "Press Space to pick up a card. Use arrow keys to choose a column, Space to drop, or Escape to cancel. You can also use the card’s Move-to menu.",
+          },
+          announcements: {
+            onDragStart: ({ active }) =>
+              `Picked up card ${board.answers.findIndex((a) => a.id === active.id) + 1}.`,
+            onDragOver: ({ over }) =>
+              over ? `Over ${columnName(String(over.id))}.` : "Outside a column. Drop to cancel.",
+            onDragEnd: () => "Drag finished. Wait for the grouping result.",
+            onDragCancel: () => "Move cancelled.",
+          },
+        }}
+        onDragStart={({ active, activatorEvent }) => {
+          keyboardTarget.current =
+            activatorEvent instanceof KeyboardEvent
+              ? (board.answers.find((answer) => answer.id === active.id)?.assignment?.topicId ??
+                ungrouped)
+              : null;
+          setHeld(board);
+          setDragging(String(active.id));
+          setError("");
+          setNotice("");
+        }}
+        onDragCancel={cancelDrag}
+        onDragEnd={({ active, over }) => {
+          keyboardTarget.current = null;
+          setDragging(null);
+          const answer = board.answers.find((a) => a.id === active.id);
+          if (!over || !answer) {
+            cancelDrag();
+            return;
+          }
+          void move(answer, String(over.id), "drag");
+        }}
+      >
+        <div className="board-columns">
+          {columns.map((column) => {
+            const topic = board.topics.find((t) => t.id === column.id);
+            const cards = board.answers.filter(
+              (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
+            );
+            return (
+              <TopicColumn
+                key={column.id}
+                id={column.id}
+                topic={topic}
+                count={cards.length}
+                busy={busy || !!dragging}
+                onRename={(name) =>
+                  change(renameTopic, { id: column.id, name }, "updateRetroTopics")
+                }
+                onDelete={() => change(deleteTopic, { id: column.id }, "deleteRetroTopics")}
+              >
+                {cards.map((answer) => (
+                  <AnswerCard
+                    key={answer.id}
+                    answer={answer}
+                    number={board.answers.findIndex((a) => a.id === answer.id) + 1}
+                    topics={board.topics}
+                    busy={busy}
+                    onMove={(target, control) => {
+                      if (!dragging) void move(answer, target, control);
+                    }}
+                  />
+                ))}
+              </TopicColumn>
+            );
+          })}
+        </div>
+        <DragOverlay dropAnimation={null}>
+          {dragged && (
+            <div className="board-card drag-preview" aria-hidden="true">
+              <p className="answer-text">{dragged.text}</p>
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
+      <div className="editor-panel topic-composer">
+        <h2>Add a theme</h2>
+        <TextForm
+          label="New topic"
+          maximum={120}
+          submit="Add topic"
+          blocked={busy || !!dragging}
+          failureMessage={groupingFailed}
+          onSave={(name) => change(addTopic, { questionId, name }, "insertRetroTopics")}
+        />
+      </div>
+    </section>
+  );
+}

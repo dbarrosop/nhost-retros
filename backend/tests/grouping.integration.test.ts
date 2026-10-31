@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { describe, expect, it } from "vitest";
+import { type BoardResult, boardQuery } from "../../frontend/src/features/board/api.ts";
 import { setFacilitator } from "../scripts/facilitator.ts";
 import { actor, cleanupActor, newGroup } from "./lib/auth.ts";
 import { blocked, data, denied, gql } from "./lib/retro.ts";
@@ -131,6 +132,21 @@ describe("facilitator-only grouping and minimal author projection", () => {
         ) =>
           expect(data(await run(document, variables), field)).toMatchObject({ affected_rows: 1 });
         expect(await assignment()).toBeNull();
+        // Execute the SPA's exact board projection on both engines, not a parallel test-only query.
+        const boardVariables = { questionId: current.question, sessionId: current.session };
+        const appBoard = data(
+          await run(boardQuery, boardVariables),
+          "retroQuestions",
+        ) as BoardResult["retroQuestions"];
+        expect(appBoard[0]?.answers[0]?.author?.id).toBe(alice.id);
+        expect(appBoard[0]?.topics.map((topic) => topic.name)).toEqual(["Keep", "Improve"]);
+        expect(
+          data(
+            await run(boardQuery, { ...boardVariables, sessionId: other.session }),
+            "retroQuestions",
+          ),
+        ).toEqual([]);
+        denied(await run(boardQuery, boardVariables, alice, "user"));
         expect((await readBoard()).answers[0].author).toEqual({
           id: alice.id,
           displayName: "Alice",

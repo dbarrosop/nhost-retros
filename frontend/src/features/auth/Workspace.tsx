@@ -1,15 +1,18 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { useAuth } from "../../lib/auth";
 import type { AppRole } from "../../lib/retro-api";
+import { QuestionBoard } from "../board/QuestionBoard";
 import { SessionDetail } from "../sessions/SessionDetail";
 import { Sessions } from "../sessions/Sessions";
 
 export function Workspace({
   appRole: role = "user",
   sessionId,
+  questionId,
 }: {
   appRole?: AppRole;
   sessionId?: string;
+  questionId?: string;
 }) {
   const { ready, session, notice, store, generation, canQuery } = useAuth();
   if (!ready)
@@ -54,7 +57,9 @@ export function Workspace({
       </section>
       {canQuery ? (
         <div key={`${generation}:${role}`}>
-          {sessionId ? (
+          {sessionId && questionId && role === "facilitator" ? (
+            <QuestionBoard key={questionId} sessionId={sessionId} questionId={questionId} />
+          ) : sessionId ? (
             <SessionDetail key={sessionId} id={sessionId} role={role} />
           ) : (
             <Sessions role={role} />

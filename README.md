@@ -12,8 +12,11 @@ operator-provisioned facilitators create, rename, delete empty sessions, manage
 questions and permanently end conversations. Backend permissions recheck live
 account eligibility and trusted membership; database locks freeze closed content
 even for stale/concurrent clients. Only exact `@nhost.io` accounts are admitted;
-no password UI exists. Facilitators have a read-all API without content-edit access;
-the author directory and clustering dashboard belong to later slices.
+no password UI exists. Facilitators open a per-question reflection board with
+author-labelled cards, named topics, mouse/touch/keyboard dragging and a Move-to
+menu on every card. Topic management and grouping stay available after ending;
+facilitators never edit another person’s answer content. Participants cannot enter
+or query this board.
 Welcome prompts remain editorial, not participant content. The welcome screen
 alone needs no backend; accounts and retrospectives need a migrated local stack.
 
@@ -63,7 +66,9 @@ auth generations, session/question management, draft preservation and late-respo
 rejection. Both GraphQL engines are tested with real JWTs for live eligibility,
 revocation, private-card projections/ownership, management permissions and immutable
 closure. Desktop/mobile browser journeys prove two-person isolation, multiple cards,
-confirmed deletion and stale-draft retention after ending. Controlled Postgres
+confirmed deletion and stale-draft retention after ending. Board journeys cover
+real mouse/touch/keyboard moves, failed stale destinations, post-end grouping,
+long-text/mobile layout and axe checks without serious/critical findings. Controlled Postgres
 connections prove both closure lock orders and rollback behavior. Backend unit tests exercise target
 guards, operator loopback connections, occupied ports, budgets and metadata loading.
 CI also provisions the isolated stack and executes the real-JWT, scratch-migration

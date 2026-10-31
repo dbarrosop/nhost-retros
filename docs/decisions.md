@@ -231,3 +231,52 @@
   intermittent failure did not reproduce in six diagnostic mobile runs; these
   changes remove the identified unsynchronized readiness/timer hazards rather
   than claiming a measured server or Web-Lock delay from that prior failure.
+
+## Phase 7 — Accessible facilitator reflection board
+
+- **A separate question route with an explicit role.** Facilitators enter the
+  board from each question, including ended sessions. The authenticated workspace
+  rejects participant deep links before mounting any board query. A small typed
+  facilitator-only projection fetches the question, ordered topics and cards with
+  minimal author identity; both question and session IDs constrain the read.
+  The exact SPA document is also executed with real JWTs on both engines. Shared
+  dependency-light query modules use `.js` import specifiers so both Vite and the
+  backend tests' NodeNext TypeScript resolver can consume them.
+- **Server-authoritative grouping, not optimistic rearrangement.** A move chooses
+  explicit assignment insert/update/delete from the displayed snapshot. There is
+  one in-flight grouping write; zero affected rows and failures trigger a refetch
+  and a sanitized grouping-specific message, never a stale automatic retry or a
+  misleading “session ended” error. The displayed snapshot stays fixed during
+  dragging or a pending write while polling may refresh the underlying cache;
+  releasing it exposes the latest authoritative data. Topic deletion is confirmed
+  and moves assignments to Ungrouped without touching answer content. No backend
+  permissions, SQL invariants or production configuration change in this slice.
+- **Equivalent paths, calm presentation.** Grip-only mouse/touch sensors let the
+  rest of a post-it remain scrollable/selectable; touch activation requires a short
+  hold. Keyboard arrows step through columns in DOM order, even when mobile stacks
+  them vertically. Keyboard collision targets are explicit: column centers can
+  misclassify a tall card beside an empty column. The browser journey moves a
+  4,000-code-point card into an empty theme. A labelled native Move-to menu is
+  always available. Moves restore
+  focus by stable card/control ID after the column remount and announce the result;
+  cancellation, rename and confirmed deletion also have explicit focus targets.
+  Cards keep stable muted colors, wrap plain text and show author names/emails only
+  here. The palette is decorative, helping visually track a card across moves; it
+  does not encode author, topic, sentiment or status. Labels and columns carry all
+  meaning without relying on color. Reduced-motion styling and a nonanimated drag
+  overlay avoid unnecessary motion. Ended boards expose grouping controls, never
+  content editors.
+- **A refetch failure is not an empty workspace.** The board route keeps its cached
+  session and mounted board on transient session-read failures, with an inline
+  alert. Replacing the whole route with an error would destroy the drag context,
+  focus and topic drafts even when the independent board query still succeeds.
+  The router/AuthProvider regression checks retained DOM identity, focused rename
+  input and both topic drafts through session-read failure and recovery. Successful
+  empty reads or auth-generation cleanup still remove unavailable private data.
+- **Browser gesture tests must follow real geometry and event readiness.** DnD
+  auto-scroll can change viewport coordinates while waiting for a real poll; measure
+  destination geometry at movement time, not at pickup. The pinned KeyboardSensor
+  attaches document listeners on the next task; synchronize a paint after pickup
+  before an immediate synthetic Escape. Desktop mouse, mobile CDP touch, keyboard,
+  native Move-to, stale-target rejection and axe scans exercise actual controls,
+  rather than replacing the drag library with test-only callbacks.
