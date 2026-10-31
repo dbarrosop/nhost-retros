@@ -52,7 +52,7 @@ function setup(path = "/auth") {
   );
   return { store, client };
 }
-describe("company email forms", () => {
+describe("email OTP forms", () => {
   it("guards the workspace and gives signup and sign-in separate entry points", async () => {
     const user = userEvent.setup();
     const { store } = setup("/workspace");
@@ -60,7 +60,7 @@ describe("company email forms", () => {
     const send = vi.spyOn(store, "sendCode").mockResolvedValue();
     await user.click(screen.getByRole("button", { name: "Create account" }));
     await screen.findByRole("heading", { name: "Create your account" });
-    await user.type(screen.getByLabelText("Company email"), "Person@NHOST.IO");
+    await user.type(screen.getByLabelText("Email"), "Person@NHOST.IO");
     await user.click(screen.getByRole("button", { name: "Create account & send code" }));
     expect(send).toHaveBeenCalledWith("Person@NHOST.IO", true);
     expect(await screen.findByLabelText("One-time code")).toHaveFocus();
@@ -72,7 +72,7 @@ describe("company email forms", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("invalid, expired or already used");
     expect(screen.getByLabelText("One-time code")).toHaveValue("123456");
     await user.click(screen.getByRole("button", { name: "Use another email" }));
-    expect(screen.getByLabelText("Company email")).toHaveValue("person@nhost.io");
+    expect(screen.getByLabelText("Email")).toHaveValue("person@nhost.io");
   });
   it("enters the workspace after successful OTP verification with a facilitator default role", async () => {
     const user = userEvent.setup();
@@ -96,7 +96,7 @@ describe("company email forms", () => {
       headers: new Headers(),
     });
     await screen.findByRole("heading", { name: "Welcome back" });
-    await user.type(screen.getByLabelText("Company email"), "facilitator@nhost.io");
+    await user.type(screen.getByLabelText("Email"), "facilitator@nhost.io");
     await user.click(screen.getByRole("button", { name: "Send sign-in code" }));
     await user.type(await screen.findByLabelText("One-time code"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify and continue" }));
@@ -112,7 +112,7 @@ describe("company email forms", () => {
     vi.spyOn(store, "sendCode").mockResolvedValue();
     vi.spyOn(store, "verify").mockRejectedValue({ status: 403, code: "ineligible-session" });
     await screen.findByRole("heading", { name: "Welcome back" });
-    await user.type(screen.getByLabelText("Company email"), "participant@nhost.io");
+    await user.type(screen.getByLabelText("Email"), "participant@nhost.io");
     await user.click(screen.getByRole("button", { name: "Send sign-in code" }));
     await user.type(await screen.findByLabelText("One-time code"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify and continue" }));
@@ -121,22 +121,25 @@ describe("company email forms", () => {
     expect(alert).not.toHaveTextContent("code is invalid");
     expect(screen.getByLabelText("One-time code")).toHaveValue("123456");
   });
-  it("rejects non-company domains before requests and sanitizes throttled sends", async () => {
+  it("accepts arbitrary email domains and sanitizes throttled sends", async () => {
     const user = userEvent.setup();
     const { store } = setup();
     await screen.findByRole("heading", { name: "Welcome back" });
     const send = vi
       .spyOn(store, "sendCode")
       .mockRejectedValue({ status: 429, body: "private backend internals" });
-    const email = screen.getByLabelText("Company email");
-    await user.type(email, "outside@sub.nhost.io");
-    await user.click(screen.getByRole("button", { name: "Send sign-in code" }));
-    expect(send).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent("exact @nhost.io");
-    await user.clear(email);
-    await user.type(email, "inside@nhost.io");
-    await user.click(screen.getByRole("button", { name: "Send sign-in code" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
+    const email = screen.getByLabelText("Email");
+    for (const address of [
+      "outside@sub.nhost.io",
+      "person@example.com",
+      "factilitator@acme.local",
+    ]) {
+      await user.clear(email);
+      await user.type(email, address);
+      await user.click(screen.getByRole("button", { name: "Send sign-in code" }));
+      expect(send).toHaveBeenLastCalledWith(address, false);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
+    }
     expect(screen.queryByText("private backend internals")).not.toBeInTheDocument();
   });
 });

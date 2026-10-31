@@ -3,7 +3,7 @@ import type { Session } from "@nhost/nhost-js/auth";
 import { MemoryStorage } from "@nhost/nhost-js/session";
 import { onlineManager } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AuthStore, authMessage, companyEmail, eligible, normalizeEmail } from "./auth-store";
+import { AuthStore, authMessage, eligible, normalizeEmail, validEmail } from "./auth-store";
 import { authQueryKey, createQueryClient } from "./query-client";
 
 function testSession(id = "first", roles = ["user", "me"], defaultRole = "user"): Session {
@@ -209,26 +209,38 @@ describe("auth lifecycle", () => {
       queries.clear();
     }
   });
-  it("normalizes email and accepts only exact company addresses", () => {
-    expect(normalizeEmail("  PERSON@NHOST.IO  ")).toBe("person@nhost.io");
-    expect(companyEmail("  PERSON@NHOST.IO ")).toBe(true);
+  it("normalizes email without restricting its domain", () => {
+    expect(normalizeEmail("  PERSON@ACME.LOCAL  ")).toBe("person@acme.local");
+    for (const value of ["  PERSON@ACME.LOCAL ", "person@sub.nhost.io", "person@example.com"])
+      expect(validEmail(value)).toBe(true);
     for (const value of [
-      "person@sub.nhost.io",
-      "person@nhost.io.evil.test",
-      "person@nhоst.io",
-      "a@@nhost.io",
-      "a b@nhost.io",
-      "outside@example.com",
+      "",
+      "person",
+      "person@",
+      "@example.com",
+      "a@@example.com",
+      "a b@example.com",
+      "a@localhost",
     ])
-      expect(companyEmail(value)).toBe(false);
+      expect(validEmail(value)).toBe(false);
   });
-  it("does not admit unverified, anonymous, non-user or external sessions", () => {
+  it.each(["person@acme.local", "person@example.com", "person@sub.nhost.io"])(
+    "admits a verified account at %s",
+    (email) => {
+      const { client } = setup();
+      const session = testSession();
+      if (session.user) session.user.email = email;
+      client.sessionStorage.set(session);
+      expect(eligible(client.getUserSession())).toBe(true);
+    },
+  );
+  it("does not admit unverified, anonymous, malformed or non-user sessions", () => {
     const { client } = setup();
     for (const patch of [
       { emailVerified: false },
       { isAnonymous: true },
       { defaultRole: "me" },
-      { email: "a@other.test" },
+      { email: "not-an-email" },
       { roles: ["me"] },
       { roles: ["facilitator"] },
     ]) {

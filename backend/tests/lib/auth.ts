@@ -113,7 +113,7 @@ export type Actor = {
 
 export async function actor(group: AuthGroup): Promise<Actor> {
   const id = randomUUID();
-  const email = `fixture-${id}@nhost.io`;
+  const email = `fixture-${id}@acme.local`;
   const password = randomBytes(24).toString("hex");
   const client = await connect(group.target);
   try {

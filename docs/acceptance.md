@@ -172,3 +172,15 @@ CI run or a new browser-suite run; hosted CI and production acceptance remain
 unexecuted.
 Production operator inputs and safe rollback/retention requirements are listed
 in [operations](operations.md#production-checklist-deferred-not-a-deployment-command).
+
+## Unrestricted email-domain regression
+
+Removed domain checks from Auth configuration, the live eligibility view, the
+trusted facilitator helper and frontend forms/session eligibility. The new view
+migration preserves all other live authorization checks and has a tested down path.
+
+Local validation: lint, TypeScript checks, 160 unit tests and the production build
+passed. A fresh registered disposable stack passed all six migration up/down/up
+checks and 19 integration tests, including arbitrary-domain/implicit OTP signup,
+role-escalation rejection, verified `@acme.local` OTP sessions and both GraphQL
+engines. The developer database was not reset or used for these checks.

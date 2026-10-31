@@ -346,8 +346,6 @@ describe("facilitator-only grouping and minimal author projection", () => {
 
         // Every operation checks live eligibility and membership, even with an issued JWT.
         for (const change of [
-          "UPDATE auth.users SET email='outside@example.com' WHERE id=$1",
-          "UPDATE auth.users SET email='outside@sub.nhost.io' WHERE id=$1",
           "UPDATE auth.users SET disabled=true WHERE id=$1",
           "UPDATE auth.users SET email_verified=false WHERE id=$1",
           "UPDATE auth.users SET is_anonymous=true WHERE id=$1",

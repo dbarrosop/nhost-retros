@@ -281,12 +281,13 @@ describe("additive developer operations", () => {
     expect(effects.backup).not.toHaveBeenCalled();
     expect(effects.mkdir).not.toHaveBeenCalled();
   });
-  it("resolves a developer email without accepting external domains or implicit signup", async () => {
+  it("resolves developer emails from any domain without creating accounts", async () => {
     const query = vi.fn().mockResolvedValue({ rows: [{ id: "public-id" }], rowCount: 1 });
     const db = { query } as unknown as pg.Client;
     expect(await developerAccountId(db, " Person@NHOST.IO ")).toBe("public-id");
     expect(query).toHaveBeenLastCalledWith(expect.any(String), ["person@nhost.io"]);
-    await expect(developerAccountId(db, "a@sub.nhost.io")).rejects.toThrow("exact");
+    expect(await developerAccountId(db, "a@acme.local")).toBe("public-id");
+    await expect(developerAccountId(db, "not-an-email@")).rejects.toThrow("valid");
     query.mockResolvedValue({ rows: [], rowCount: 0 });
     await expect(developerAccountId(db, "missing@nhost.io")).rejects.toThrow("verify");
   });

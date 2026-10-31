@@ -21,9 +21,7 @@ describe("welcome workspace", () => {
     const prompts = screen.getByRole("complementary", { name: "A few reflection prompts" });
     expect(within(prompts).getByText(/What gave you/)).toBeVisible();
     expect(within(prompts).getByText(/What would make/)).toBeVisible();
-    expect(
-      screen.getByText("For verified @nhost.io accounts. A one-time code is all you need."),
-    ).toBeVisible();
+    expect(screen.getByText("Verify your email. A one-time code is all you need.")).toBeVisible();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });

@@ -494,3 +494,20 @@
   account access rather than suggesting the already-verified code was invalid.
   Other OTP failures retain their existing handling. Regression tests use only
   synthetic sessions, including the facilitator-default response shape.
+
+## Email-domain policy change
+
+- **Admit verified accounts from any email domain.** This supersedes the original
+  company-domain restriction. Auth's domain allowlist is empty; a forward view
+  migration removes the domain predicate without rewriting applied migrations or
+  changing existing accounts. Verification, enabled/non-anonymous state, supported
+  default roles and live `user`/`facilitator` membership remain authoritative.
+- **Keep role grants trusted.** The operator helper accepts accounts from any
+  domain but still requires ordinary user membership and verification. Signup may
+  request only `user,me`, never `facilitator`. OTP requests may implicitly create
+  accounts, but an unverified account cannot use the app. The existing local
+  network redirect allowlist is retained.
+- **Match the UI to the backend.** OTP forms validate email syntax, not a company
+  domain; eligibility, welcome copy and access messages no longer imply an
+  `@nhost.io` requirement. Disposable fixtures and browser OTP acceptance use
+  `@acme.local` to exercise the unrestricted policy end to end.

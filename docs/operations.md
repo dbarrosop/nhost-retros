@@ -150,21 +150,22 @@ Hasura metadata is preserved, not automatically exported into Constellation.
 These limits do not block this repository's verified local setup.
 
 For actual account onboarding, choose **Create account** in the app and enter
-your exact company address. Open <https://local.mailhog.local.nhost.run>, select
+your email address (any domain). Open <https://local.mailhog.local.nhost.run>, select
 the latest message addressed to you and copy the six-digit code from its body.
 Mailhog captures locally; no external SMTP/production URL is required. Use a
 browser GET for its UI: Mailhog can return 404 to HEAD despite serving GET normally.
-Keep OTPs private. Sign in is separate and never silently creates an account.
+Keep OTPs private. Requesting a sign-in OTP can also create an account; email
+verification is still required before it can access application data.
 
 After verification, a trusted local operator runs:
 
 ```sh
-pnpm facilitator grant you@nhost.io --developer
-pnpm facilitator revoke you@nhost.io --developer  # when needed
+pnpm facilitator grant you@example.com --developer
+pnpm facilitator revoke you@example.com --developer  # when needed
 ```
 
 `--developer` uses the same verified local connection without a password assignment.
-It accepts a UUID or a trimmed case-normalized exact-domain email, requires an
+It accepts a UUID or a trimmed case-normalized email from any domain, requires an
 existing account, and delegates eligibility/locking/default-user preservation to
 the same tested operator transaction. It never creates users or grants roles via
 Auth signup/browser metadata. Refresh/sign in again (or focus the SPA) after a
@@ -283,14 +284,15 @@ have explicit app read schemas on both engines; only facilitators have managemen
 mutations. Internal `me` still has no app schema (Hasura's empty-role stub versus
 Constellation's missing-role response). No role can select the eligibility view
 or an Auth directory. Live SQL membership revocation denies facilitator data even
-with an old JWT; external email changes also deny existing and refreshed JWTs.
+with an old JWT. Changing the email domain alone does not revoke access.
 
 ## Auth fixture and rate budgets
 
-The production Auth configuration stays unchanged: exact `nhost.io`, verification
-required, no anonymous accounts/implicit signup, default `user`, signup-requestable
-`user,me`; existing providers and redirects remain. Runtime checks verify these
-values and the configured rate limits. No production limiter overlay is used.
+Auth accepts any email domain and allows implicit OTP signup. Email verification
+is required, anonymous accounts stay disabled, the signup default is `user`, and
+only `user,me` are signup-requestable. The local redirect allowlist also includes
+the development network origin. Runtime checks verify the Auth policy and rate
+limits. No production limiter overlay is used.
 
 The pinned Auth 0.52.0 uses an in-process limiter when no memcache server is
 configured. Each backend run first exhausts the **non-email** per-IP sign-in burst
@@ -307,7 +309,7 @@ rejections: at most eight email-path requests, eight sign-in/verify requests, an
 non-email group, not an auth-policy or OTP group. Unexpected 429s fail immediately;
 there are no retry/wait loops. Tests use one worker and the runner lock.
 
-Fixtures SQL-create enabled, verified, non-anonymous `@nhost.io` users with a
+Fixtures SQL-create enabled, verified, non-anonymous `@acme.local` users with a
 bcrypt password and explicit `user,me` membership. This Auth version requires
 `locale='en'` on SQL fixtures (there is no database default). Each actor makes one
 non-email `/signin/email-password` request and reuses `/token` refresh thereafter.
@@ -326,8 +328,8 @@ external SMTP.
 OTP acceptance now uses real signup/sign-in/verification and Mailhog on desktop
 and mobile. Each browser group spends three email-path requests and five
 sign-in/verify requests (signup, wrong code, resend, verification, later sign-in).
-Auth policy groups are separate: seven email paths for rejected domains/role
-requests plus unknown-account sign-in; two email paths/five sign-in/verify requests
+Auth policy groups are separate: seven email paths for arbitrary-domain signup,
+rejected role requests and implicit-account sign-in; two email paths/five sign-in/verify requests
 for wrong/expired/reused-code and metadata-escalation checks. Disabled-account
 refresh, fake facilitator headers and grant/revoke JWT refreshes are also tested.
 Role-header denial probes use `__typename`, not an inaccessible table (which can
@@ -381,7 +383,7 @@ used only for this loopback disposable stack; the developer HTTPS stack is uncha
 
 ## Accounts and trusted local facilitator provisioning
 
-Use **Create account** on the sign-in page for a new company account, then enter
+Use **Create account** on the sign-in page for a new account, then enter
 the six-digit email code. **Sign in** never creates accounts implicitly. Emails
 are trimmed/lowercased; exact-domain checks run in the form and Auth. There is no
 password/reset/OAuth surface. A 30-second browser resend cooldown is a usability
@@ -415,8 +417,8 @@ trusted SQL operator can run these commands from repo root:
 
 ```sh
 # Existing developer stack; no credential assignment needed (UUID also accepted):
-pnpm facilitator grant you@nhost.io --developer
-pnpm facilitator revoke you@nhost.io --developer
+pnpm facilitator grant you@example.com --developer
+pnpm facilitator revoke you@example.com --developer
 
 # Identity-verified registered disposable target; credentials loaded privately:
 pnpm facilitator grant <account-uuid> --test-target
@@ -584,7 +586,7 @@ and reviews them; never guess URLs or commit credentials.
   secret manager, verified delivery and team-scale quota/capacity. Review Auth's
   project-wide email/IP limits before onboarding; the local ten-email/hour
   configuration and default email service are unsuitable for a team rollout.
-  Do not weaken verification/domain/role checks to accommodate quotas. Local
+  Do not weaken verification/role checks to accommodate quotas. Local
   Mailhog and limiter resets are disposable-only, never production workarounds.
 - A backup owner, protected encrypted storage, retention policy, restore access
   and a maintenance window for SQL changes. Back up the complete database
@@ -593,8 +595,9 @@ and reviews them; never guess URLs or commit credentials.
   into an isolated environment before rollout. Record engine/CLI/image versions
   and the release revision; an untested dump is not a recovery plan.
 
-Preserve exact `nhost.io` eligibility, required verification, disabled anonymous
-accounts/implicit signup, default `user` and signup-requestable `user,me`.
+Preserve required verification, disabled anonymous accounts, default `user` and
+signup-requestable `user,me`. Email domains are unrestricted; OTP requests may
+create accounts, but unverified accounts have no application access.
 `facilitator` must never become signup-requestable or the default. Check live
 eligibility/membership permissions on **both** engines after configuration changes.
 Do not enable unrelated Auth providers or storage permissions as part of rollout.

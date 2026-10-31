@@ -12,9 +12,7 @@ export async function setFacilitator(db: Database, id: string, action: "grant" |
   await db.query("BEGIN");
   try {
     const account = await db.query(
-      `SELECT default_role, email_verified AND NOT disabled AND NOT is_anonymous
-         AND split_part(lower(email::text),'@',2) = 'nhost.io'
-         AND email::text ~ '^[^@]+@[^@]+$' AS eligible
+      `SELECT default_role, email_verified AND NOT disabled AND NOT is_anonymous AS eligible
        FROM auth.users WHERE id=$1 FOR UPDATE`,
       [id],
     );

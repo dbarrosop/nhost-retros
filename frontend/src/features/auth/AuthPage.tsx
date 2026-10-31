@@ -1,7 +1,7 @@
 import { Link, Navigate } from "@tanstack/react-router";
 import { type SubmitEvent, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../lib/auth";
-import { authMessage, companyEmail, normalizeEmail } from "../../lib/auth-store";
+import { authMessage, normalizeEmail, validEmail } from "../../lib/auth-store";
 
 export function AuthPage() {
   const { session, ready, notice, store } = useAuth();
@@ -29,8 +29,8 @@ export function AuthPage() {
   async function send(resend = false) {
     setError("");
     setMessage("");
-    if (!companyEmail(email)) {
-      setError("Use your exact @nhost.io email address.");
+    if (!validEmail(email)) {
+      setError("Enter a valid email address.");
       return;
     }
     setPending(true);
@@ -76,13 +76,13 @@ export function AuthPage() {
         <h1>
           A little space <em>to be heard.</em>
         </h1>
-        <p>Start with your Nhost email. We’ll send a one-time code — no password to remember.</p>
+        <p>Start with your email. We’ll send a one-time code — no password to remember.</p>
         <Link className="quiet-link" to="/">
           Back to welcome <span aria-hidden="true">↗</span>
         </Link>
       </section>
       <section className="auth-panel" aria-labelledby="auth-title">
-        <span className="small-label">NHOST TEAM WORKSPACE</span>
+        <span className="small-label">TEAM WORKSPACE</span>
         <h2 id="auth-title">
           {sent ? "Check your inbox" : signup ? "Create your account" : "Welcome back"}
         </h2>
@@ -93,9 +93,9 @@ export function AuthPage() {
               one below.
             </>
           ) : signup ? (
-            "New here? Verify your company email to join."
+            "New here? Verify your email to join."
           ) : (
-            "Sign in with your verified company email."
+            "Sign in with your verified email."
           )}
         </p>
         <form onSubmit={submit} aria-busy={pending}>
@@ -119,13 +119,13 @@ export function AuthPage() {
             </>
           ) : (
             <>
-              <label htmlFor="email">Company email</label>
+              <label htmlFor="email">Email</label>
               <input
                 id="email"
                 name="email"
                 type="email"
                 autoComplete="email"
-                placeholder="you@nhost.io"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
@@ -133,7 +133,7 @@ export function AuthPage() {
                 aria-describedby="email-help auth-feedback"
               />
               <p id="email-help" className="field-hint">
-                Only exact @nhost.io addresses are eligible.
+                Use an email address where you can receive a one-time code.
               </p>
             </>
           )}

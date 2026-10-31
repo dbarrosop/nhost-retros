@@ -12,7 +12,7 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
   test.setTimeout(120_000);
   const target = await guard();
   const group = await newGroup(target);
-  const email = `browser-${randomUUID()}@nhost.io`;
+  const email = `browser-${randomUUID()}@acme.local`;
   const statuses: number[] = [];
   // Navigation/load and a hidden connection notice do not mean that the lock-gated
   // refresh has finished. Observe its response without reading/logging credentials.
@@ -55,7 +55,7 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     await page.goto("/workspace");
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await page.getByRole("button", { name: "Create account", exact: true }).click();
-    await page.getByLabel("Company email").fill(`  ${email.toUpperCase()}  `);
+    await page.getByLabel("Email").fill(`  ${email.toUpperCase()}  `);
     await page.getByRole("button", { name: "Create account & send code" }).click();
     await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
     await expect(page.getByLabel("One-time code")).toBeFocused();
@@ -119,7 +119,7 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await expect(other.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await other.close();
-    await page.getByLabel("Company email").fill(email);
+    await page.getByLabel("Email").fill(email);
     await page.getByRole("button", { name: "Send sign-in code" }).click();
     await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
     await fillCode(await latestCode(target, email));

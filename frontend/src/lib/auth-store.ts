@@ -3,13 +3,14 @@ import { onlineManager, type QueryClient } from "@tanstack/react-query";
 import { clearPrivateQueries } from "./query-client";
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
-export const companyEmail = (email: string) => /^[^\s@]+@nhost\.io$/.test(normalizeEmail(email));
+export const validEmail = (email: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
 export function eligible(session: StoredSession | null): session is StoredSession {
   const user = session?.user;
   // Both app defaults are valid; access still uses explicit roles and membership.
   return Boolean(
     user?.email &&
-      companyEmail(user.email) &&
+      validEmail(user.email) &&
       user.emailVerified &&
       !user.isAnonymous &&
       ["user", "facilitator"].includes(user.defaultRole) &&
@@ -18,7 +19,7 @@ export function eligible(session: StoredSession | null): session is StoredSessio
 }
 export function authMessage(error: unknown, verifying = false) {
   if ((error as { code?: string })?.code === "ineligible-session")
-    return "Your account doesn’t have access to this workspace. Use a verified @nhost.io account or contact a facilitator.";
+    return "Your account doesn’t have access to this workspace. Use a verified email account or contact a facilitator.";
   const status = (error as { status?: number })?.status;
   if (status === 429) return "Too many attempts. Please wait a few minutes before trying again.";
   if (!onlineManager.isOnline() || !status)
@@ -245,7 +246,7 @@ export class AuthStore {
     }
   }
   async sendCode(email: string, signup: boolean) {
-    if (!companyEmail(email)) throw new Error("Use your exact @nhost.io email address.");
+    if (!validEmail(email)) throw new Error("Enter a valid email address.");
     await this.operation((signal) =>
       signup
         ? this.client.auth.signUpOTPEmail({ email: normalizeEmail(email) }, { signal })

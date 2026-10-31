@@ -133,7 +133,7 @@ export async function connectDeveloper() {
 export async function developerAccountId(db: pg.Client, value: string) {
   if (!value.includes("@")) return value;
   const email = value.trim().toLowerCase();
-  assert(/^[^\s@]+@nhost\.io$/.test(email), "Use an exact @nhost.io developer account");
+  assert(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email), "Use a valid developer email address");
   const result = await db.query("SELECT id FROM auth.users WHERE lower(email::text)=$1", [email]);
   assert(result.rowCount === 1, "Create and verify this developer account by OTP first");
   return result.rows[0].id as string;

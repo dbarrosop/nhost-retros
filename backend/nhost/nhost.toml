@@ -40,11 +40,12 @@ mode = 'disabled'
 
 [auth.redirections]
 clientUrl = 'http://localhost:5173'
+allowedUrls = ['http://100.71.95.47:5173']
 
 [auth.signUp]
 enabled = true
 disableNewUsers = false
-disableAutoSignup = true
+disableAutoSignup = false
 
 [auth.user]
 [auth.user.roles]
@@ -63,7 +64,7 @@ rating = 'g'
 [auth.user.email]
 
 [auth.user.emailDomains]
-allowed = ["nhost.io"]
+allowed = []
 
 [auth.session]
 [auth.session.accessToken]

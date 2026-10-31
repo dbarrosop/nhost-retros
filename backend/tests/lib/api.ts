@@ -144,8 +144,8 @@ export function assertAuthConfig(target: Target) {
     }),
   );
   const expected = {
-    AUTH_ACCESS_CONTROL_ALLOWED_EMAIL_DOMAINS: "nhost.io",
-    AUTH_DISABLE_AUTO_SIGNUP: "true",
+    AUTH_ACCESS_CONTROL_ALLOWED_EMAIL_DOMAINS: "",
+    AUTH_DISABLE_AUTO_SIGNUP: "false",
     AUTH_EMAIL_SIGNIN_EMAIL_VERIFIED_REQUIRED: "true",
     AUTH_USER_DEFAULT_ROLE: "user",
     AUTH_USER_DEFAULT_ALLOWED_ROLES: "user,me",
@@ -157,7 +157,7 @@ export function assertAuthConfig(target: Target) {
     AUTH_RATE_LIMIT_ENABLE: "true",
   };
   for (const [key, value] of Object.entries(expected))
-    assert(env[key] === value, `Auth policy mismatch: ${key}`);
+    assert((env[key] ?? "") === value, `Auth policy mismatch: ${key}`);
 }
 
 function included(path: string): unknown {

@@ -1,17 +1,17 @@
 # Retro
 
-A calm retrospective workspace for the Nhost team. Built with React, TypeScript,
+A calm retrospective workspace for your team. Built with React, TypeScript,
 TanStack Router and TanStack Query, backed by Nhost Auth and GraphQL.
 
 ## Current slice
 
-Verified company OTP signup/sign-in, restoration and cross-tab signout lead to
+Verified email OTP signup/sign-in, restoration and cross-tab signout lead to
 shared active/ended retrospectives and their questions. Participants add multiple
 private reflection cards per question and edit/delete only their own active cards;
 operator-provisioned facilitators create, rename, delete empty sessions, manage
 questions and permanently end conversations. Backend permissions recheck live
 account eligibility and trusted membership; database locks freeze closed content
-even for stale/concurrent clients. Only exact `@nhost.io` accounts are admitted;
+even for stale/concurrent clients. Verified accounts from any email domain are admitted;
 no password UI exists. Facilitators open a per-question reflection board with
 author-labelled cards, named topics, mouse/touch/keyboard dragging and a Move-to
 menu on every card. Topic management and grouping stay available after ending;
@@ -57,18 +57,18 @@ merges only retro metadata and refreshes Constellation. It never resets volumes
 or runs down SQL. It requires this repository's running `backend-*` project on
 HTTPS 443/Postgres 5432; no database URL or admin secret needs to be pasted.
 
-Create/verify your exact `@nhost.io` account in the app. Retrieve the OTP from
+Create/verify your email account in the app. Retrieve the OTP from
 <https://local.mailhog.local.nhost.run> (local mail capture, no external SMTP).
 Then a trusted local operator can bootstrap facilitation from repo root:
 
 ```sh
-pnpm facilitator grant you@nhost.io --developer
+pnpm facilitator grant you@example.com --developer
 # Refresh/sign in again, then use “Facilitator workspace”.
-# To revoke: pnpm facilitator revoke you@nhost.io --developer
+# To revoke: pnpm facilitator revoke you@example.com --developer
 ```
 
-Account creation is still explicit; the helper never creates users or grants an
-ineligible account. See [developer setup details](docs/operations.md#developer-local-setup-no-reset)
+OTP requests can create new accounts, but verification is required for access.
+The helper never creates users or grants an ineligible account. See [developer setup details](docs/operations.md#developer-local-setup-no-reset)
 for backups, safe retries and limitations. No persistent frontend server is
 started by setup.
 

@@ -9,50 +9,70 @@ import { connect, guard } from "./lib/target.ts";
 
 const denied = (status: number) => status >= 400 && status < 500 && status !== 429;
 
-describe("company OTP policy and trusted roles (ordered groups)", () => {
-  it("rejects external, subdomain, lookalike domains and requestable role/defaultRole elevation", async () => {
+describe("email OTP policy and trusted roles (ordered groups)", () => {
+  it("accepts any email domain and implicit OTP signup without allowing role elevation", async () => {
     const target = await guard();
     const group = await newGroup(target);
     const prefix = `policy-${randomUUID()}`;
-    const cases = [
-      { email: `${prefix}@example.com` },
-      { email: `${prefix}@team.nhost.io` },
-      { email: `${prefix}@nhost.io.example.com` },
-      { email: `${prefix}@nhоst.io` }, // Cyrillic o
-      { email: `${prefix}@nhost.io`, options: { allowedRoles: ["user", "facilitator"] } },
-      { email: `${prefix}@nhost.io`, options: { defaultRole: "facilitator" } },
-    ];
-    for (const body of cases) {
-      const reply = await group.post("/signup/otp/email", body);
-      assert(
-        denied(reply.status),
-        `Auth must reject domain/role escalation (status ${reply.status})`,
-      );
-    }
-    const implicit = await group.post("/signin/otp/email", { email: `${prefix}@nhost.io` });
-    // Pinned Auth deliberately returns OK for unknown accounts to avoid enumeration.
-    assert(
-      implicit.status === 200 && !implicit.body.session,
-      "Unknown-account sign-in returned a session",
-    );
     const db = await connect(target);
     try {
+      for (const options of [
+        { allowedRoles: ["user", "facilitator"] },
+        { defaultRole: "facilitator" },
+      ]) {
+        const reply = await group.post("/signup/otp/email", {
+          email: `${prefix}-rejected@acme.local`,
+          options,
+        });
+        assert(denied(reply.status), `Auth must reject role escalation (status ${reply.status})`);
+      }
       assert(
-        (await db.query("SELECT 1 FROM auth.users WHERE email::text LIKE $1", [`${prefix}%`]))
-          .rowCount === 0,
-        "Rejected Auth request created an account",
+        (
+          await db.query("SELECT 1 FROM auth.users WHERE email=$1", [
+            `${prefix}-rejected@acme.local`,
+          ])
+        ).rowCount === 0,
+        "Rejected role request created an account",
       );
+      for (const domain of ["example.com", "acme.local", "team.nhost.io", "nhost.io.example.com"]) {
+        const reply = await group.post("/signup/otp/email", { email: `${prefix}@${domain}` });
+        assert(
+          reply.status === 200 && !reply.body.session,
+          "Signup must wait for email verification",
+        );
+      }
+      const implicit = await group.post("/signin/otp/email", {
+        email: `${prefix}-implicit@acme.local`,
+      });
+      assert(
+        implicit.status === 200 && !implicit.body.session,
+        "Implicit signup bypassed verification",
+      );
+      const accounts = await db.query(
+        `SELECT email_verified,default_role,
+           EXISTS(SELECT 1 FROM auth.user_roles r WHERE r.user_id=u.id AND r.role='facilitator') AS is_facilitator
+         FROM auth.users u WHERE email::text LIKE $1`,
+        [`${prefix}%`],
+      );
+      assert(
+        accounts.rowCount === 5 &&
+          accounts.rows.every(
+            (row) => !row.email_verified && row.default_role === "user" && !row.is_facilitator,
+          ),
+        "Email signup granted unverified access or elevated roles",
+      );
+      assert(group.budget.email === 7, "Auth policy request budget changed");
+      assertAuthConfig(target);
     } finally {
+      await db.query("DELETE FROM auth.users WHERE email::text LIKE $1", [`${prefix}%`]);
       await db.end();
     }
-    assert(group.budget.email === 7, "Auth policy request budget changed");
-    assertAuthConfig(target);
   });
 
   it("requires verification, rejects wrong/expired/reused codes, and ignores metadata role claims", async () => {
     const target = await guard();
     const group = await newGroup(target);
-    const email = `otp-policy-${randomUUID()}@nhost.io`;
+    const email = `otp-policy-${randomUUID()}@acme.local`;
     const db = await connect(target);
     let id = "";
     try {
@@ -131,8 +151,6 @@ describe("company OTP policy and trusted roles (ordered groups)", () => {
         [false, false, false, fixture.email],
         [true, true, false, fixture.email],
         [true, false, true, fixture.email],
-        [true, false, false, "outside@example.com"],
-        [true, false, false, "outside@sub.nhost.io"],
       ]) {
         await db.query(
           "UPDATE auth.users SET email_verified=$2,disabled=$3,is_anonymous=$4,email=$5 WHERE id=$1",

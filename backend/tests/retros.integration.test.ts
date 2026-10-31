@@ -220,9 +220,6 @@ describe("sessions and questions through both real-JWT engines", () => {
     ).rows[0].id;
     try {
       for (const [email, disabled, verified, anonymous] of [
-        ["outside@example.com", false, true, false],
-        ["outside@sub.nhost.io", false, true, false],
-        ["outside@nhost.io.example.com", false, true, false],
         [manager.email, true, true, false],
         [manager.email, false, false, false],
         [manager.email, false, true, true],
@@ -259,8 +256,7 @@ describe("sessions and questions through both real-JWT engines", () => {
           [manager.id, manager.email],
         );
       }
-      // The pinned Auth can issue refreshed tokens after an operator email change.
-      // Regardless of its policy, an issued token must not restore app access.
+      // Changing a verified account's domain does not revoke its application access.
       await db.query("UPDATE auth.users SET email='refreshed@example.com' WHERE id=$1", [
         manager.id,
       ]);
@@ -268,7 +264,11 @@ describe("sessions and questions through both real-JWT engines", () => {
       expect(refreshed.user.email).toBe("refreshed@example.com");
       for (const url of [target.endpoints.hasura, target.endpoints.graphql]) {
         for (const role of ["user", "facilitator"])
-          expect(data(await gql(target, url, manager, role, read), "retroSessions")).toEqual([]);
+          expect(
+            (
+              data(await gql(target, url, manager, role, read), "retroSessions") as { id: string }[]
+            ).some((row) => row.id === session),
+          ).toBe(true);
       }
       await db.query("UPDATE auth.users SET email=$2 WHERE id=$1", [manager.id, manager.email]);
       await setFacilitator(db, manager.id, "revoke");

@@ -39,9 +39,7 @@ export function Welcome() {
           <Link className="primary-link" to="/auth">
             Join the conversation <span aria-hidden="true">↗</span>
           </Link>
-          <p className="preview-note">
-            For verified @nhost.io accounts. A one-time code is all you need.
-          </p>
+          <p className="preview-note">Verify your email. A one-time code is all you need.</p>
           <a className="quiet-link" href="#how-it-works">
             What to expect <span aria-hidden="true">↓</span>
           </a>
