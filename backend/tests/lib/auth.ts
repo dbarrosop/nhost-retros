@@ -44,7 +44,7 @@ export async function resetAuth(target: Target) {
     ),
     "Unexpected persistent Auth limiter; reset contract invalid",
   );
-  compose(target, [
+  await compose(target, [
     "up",
     "--detach",
     "--no-deps",

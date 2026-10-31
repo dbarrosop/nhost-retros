@@ -15,7 +15,7 @@ import { join } from "node:path";
 import pg from "pg";
 import { parse, stringify } from "smol-toml";
 import { parse as yaml, stringify as yamlStringify } from "yaml";
-import { assert, command, repo } from "./process.ts";
+import { assert, command, commandAsync, repo } from "./process.ts";
 
 export const state = join(repo, ".local-test");
 const suffix = createHash("sha256").update(repo).digest("hex").slice(0, 8);
@@ -99,6 +99,7 @@ type Container = {
   Image: string;
   Config: { Labels: Record<string, string>; Env: string[] };
   State: { Running: boolean; Health?: { Status: string } };
+  HostConfig: { PortBindings: Record<string, { HostPort: string; HostIp: string }[] | null> };
   NetworkSettings: { Ports: Record<string, { HostPort: string; HostIp: string }[] | null> };
   Mounts: { Source: string; Destination: string; Type: string; Name?: string }[];
 };
@@ -139,7 +140,7 @@ export function secrets(): Record<string, string> {
 export function compose(target: Target, args: string[]) {
   validateTarget(target);
   localDocker();
-  return command(
+  return commandAsync(
     "docker",
     [
       "compose",
@@ -149,8 +150,7 @@ export function compose(target: Target, args: string[]) {
       join(state, "runtime", "docker-compose.yaml"),
       ...args,
     ],
-    undefined,
-    240_000,
+    { timeoutMs: 240_000 },
   );
 }
 
@@ -308,22 +308,12 @@ export async function provision() {
   if (existsSync(join(state, "target.json"))) {
     const target = loadTarget();
     await locked(async () => {
-      // Resume only the reserved DB if stopped, then verify identity BEFORE Auth/metadata changes.
-      const postgres = container(target, "postgres", false);
-      container(target, "traefik", false);
-      if (!postgres.State.Running)
-        compose(target, [
-          "up",
-          "--detach",
-          "--no-deps",
-          "--wait",
-          "--wait-timeout",
-          "60",
-          "postgres",
-        ]);
-      await guardDatabase(target);
+      // Repair only registration/label-proven resources, BEFORE starting a stopped
+      // Postgres. A previous interrupted CLI may have rewritten the file/bindings.
+      await repairRuntime(target);
+      await guard();
       syncConfig();
-      start(target);
+      await start(target);
       await guard();
       await prepare(target);
     });
@@ -351,68 +341,191 @@ export async function provision() {
     databaseId: randomUUID(),
     endpoints: endpoints(definition.subdomain, definition.httpPort),
   };
-  writeFileSync(join(state, "provisioning.json"), JSON.stringify(target), { mode: 0o600 });
-  const keys = generateKeyPairSync("rsa", {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: "spki", format: "pem" },
-    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  await locked(async () => {
+    writeFileSync(join(state, "provisioning.json"), JSON.stringify(target), { mode: 0o600 });
+    const keys = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: "spki", format: "pem" },
+      privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    });
+    const random = () => randomBytes(32).toString("hex");
+    const values = {
+      GRAFANA_ADMIN_PASSWORD: random(),
+      HASURA_GRAPHQL_ADMIN_SECRET: random(),
+      NHOST_JWT_KID: randomUUID(),
+      NHOST_JWT_PRIVATE_KEY: keys.privateKey,
+      NHOST_JWT_PUBLIC_KEY: keys.publicKey,
+      NHOST_WEBHOOK_SECRET: random(),
+    };
+    writeFileSync(join(state, "project", ".secrets"), stringify(values), { mode: 0o600 });
+    syncConfig();
+    await start(target);
+    // Only this new, reserved project is registerable; no developer-stack opt-in/inference.
+    psql(
+      target,
+      `CREATE SCHEMA retro_test_guard; CREATE TABLE retro_test_guard.identity(id uuid PRIMARY KEY); INSERT INTO retro_test_guard.identity VALUES ('${target.databaseId}');`,
+    );
+    writeFileSync(join(state, "target.json"), JSON.stringify(target, null, 2), { mode: 0o600 });
+    rmSync(join(state, "provisioning.json"));
+    await guard();
+    await prepare(target);
   });
-  const random = () => randomBytes(32).toString("hex");
-  const values = {
-    GRAFANA_ADMIN_PASSWORD: random(),
-    HASURA_GRAPHQL_ADMIN_SECRET: random(),
-    NHOST_JWT_KID: randomUUID(),
-    NHOST_JWT_PRIVATE_KEY: keys.privateKey,
-    NHOST_JWT_PUBLIC_KEY: keys.publicKey,
-    NHOST_WEBHOOK_SECRET: random(),
-  };
-  writeFileSync(join(state, "project", ".secrets"), stringify(values), { mode: 0o600 });
-  syncConfig();
-  start(target);
-  // Only this new, reserved project is registerable; no developer-stack opt-in/inference.
-  psql(
-    target,
-    `CREATE SCHEMA retro_test_guard; CREATE TABLE retro_test_guard.identity(id uuid PRIMARY KEY); INSERT INTO retro_test_guard.identity VALUES ('${target.databaseId}');`,
-  );
-  writeFileSync(join(state, "target.json"), JSON.stringify(target, null, 2), { mode: 0o600 });
-  rmSync(join(state, "provisioning.json"));
-  await guard();
-  await locked(async () => prepare(target));
 }
 
-function start(target: Target) {
-  command(
-    "nhost",
-    [
-      "--root-folder",
-      join(state, "project"),
-      "--nhost-folder",
-      join(state, "project", "nhost"),
-      "--dot-nhost-folder",
-      join(state, "runtime"),
-      "--project-name",
-      definition.project,
-      "--local-subdomain",
-      definition.subdomain,
-      "--branch",
-      "disposable",
-      "up",
-      "--disable-tls",
-      "--http-port",
-      `${definition.httpPort}`,
-      "--postgres-port",
-      `${definition.postgresPort}`,
-      "--down-on-error",
-    ],
-    undefined,
-    300_000,
-  );
-  // nhost 1.51.2 may return zero after an up error. Health/identity are checked independently.
-  const path = join(state, "runtime/docker-compose.yaml");
-  const config = yaml(readFileSync(path, "utf8"));
-  for (const service of Object.values(config.services) as { ports?: { host_ip?: string }[] }[]) {
-    for (const port of service.ports ?? []) port.host_ip = "127.0.0.1";
+type RuntimeConfig = {
+  name?: string;
+  services: Record<
+    string,
+    {
+      container_name?: string;
+      ports?: { target: number; published: string; host_ip?: string; protocol?: string }[];
+      volumes?: { type: string; source: string; target: string }[];
+    }
+  >;
+  volumes: Record<string, { name?: string; external?: boolean }>;
+};
+
+// Validate the entire generated port map before changing anything. Only the two
+// reserved services may publish; never turn an arbitrary compose file into a target.
+export function loopbackRuntime(config: RuntimeConfig, target: Target, databaseVolume: string) {
+  validateTarget(target);
+  assert(!config.name || config.name === target.project, "Runtime project mismatch");
+  assert(config.services?.postgres && config.services?.traefik, "Incomplete runtime services");
+  for (const [name, service] of Object.entries(config.services)) {
+    assert(!service.container_name, "Unregistered runtime container name");
+    const expected =
+      name === "postgres"
+        ? [5432, target.postgresPort]
+        : name === "traefik"
+          ? [target.httpPort, target.httpPort]
+          : undefined;
+    const ports = service.ports ?? [];
+    assert(Array.isArray(ports) && ports.length === (expected ? 1 : 0), "Unexpected runtime ports");
+    for (const port of ports) {
+      assert(
+        expected &&
+          port.target === expected[0] &&
+          `${port.published}` === `${expected[1]}` &&
+          (!port.protocol || port.protocol === "tcp"),
+        "Runtime port mismatch",
+      );
+    }
   }
-  writeFileSync(path, yamlStringify(config), { mode: 0o600 });
-  compose(target, ["up", "--detach", "--wait", "--wait-timeout", "120"]);
+  const mounts = config.services.postgres.volumes ?? [];
+  const data = mounts.filter((mount) => mount.target === "/var/lib/postgresql/data/pgdata");
+  assert(data.length === 1 && data[0].type === "volume", "Unregistered runtime database mount");
+  const volume = config.volumes?.[data[0].source];
+  assert(
+    volume &&
+      !volume.external &&
+      (volume.name ?? `${target.project}_${data[0].source}`) === databaseVolume &&
+      databaseVolume.startsWith(`${target.project}_`),
+    "Runtime database volume mismatch",
+  );
+  for (const service of Object.values(config.services))
+    for (const port of service.ports ?? []) port.host_ip = "127.0.0.1";
+  return config;
+}
+
+export async function repairRuntime(target: Target) {
+  validateTarget(target);
+  const registered = existsSync(join(state, "target.json"));
+  const reservation = registered
+    ? loadTarget()
+    : validateTarget(JSON.parse(readFileSync(join(state, "provisioning.json"), "utf8")));
+  assert(reservation.databaseId === target.databaseId, "Runtime registration identity mismatch");
+  // container() checks local transport and exact project/config-file labels even
+  // when a stopped/partially provisioned resource cannot pass the strict guard.
+  const postgres = container(target, "postgres", false);
+  const traefik = container(target, "traefik", false);
+  for (const [service, port, published] of [
+    [postgres, 5432, target.postgresPort],
+    [traefik, target.httpPort, target.httpPort],
+  ] as const) {
+    const bindings = service.HostConfig.PortBindings;
+    assert(
+      Object.keys(bindings).length === 1 &&
+        bindings[`${port}/tcp`]?.length &&
+        bindings[`${port}/tcp`]?.every(
+          (binding) =>
+            binding.HostPort === `${published}` &&
+            ["127.0.0.1", "0.0.0.0", "::", ""].includes(binding.HostIp),
+        ),
+      "Unregistered runtime port binding",
+    );
+  }
+  const data = postgres.Mounts.filter(
+    (mount) => mount.Type === "volume" && mount.Destination === "/var/lib/postgresql/data/pgdata",
+  );
+  assert(
+    data.length === 1 && data[0].Name?.startsWith(`${target.project}_`),
+    "Unregistered database volume",
+  );
+  // A running DB must prove identity BEFORE file writes or container recreation.
+  // A stopped, label/volume-proven DB is started with corrected bindings first,
+  // exactly as the old resume path did, then passes the unchanged strict guard.
+  if (registered && postgres.State.Running)
+    assert(
+      psql(target, "SELECT id FROM retro_test_guard.identity;").trim() === target.databaseId,
+      "Database identity mismatch; refusing runtime recovery",
+    );
+  const path = join(state, "runtime/docker-compose.yaml");
+  assert(realpathSync(path) === path, "Refused symlinked runtime compose file");
+  const before = readFileSync(path, "utf8");
+  let config: RuntimeConfig;
+  try {
+    config = yaml(before) as RuntimeConfig;
+    assert(config && typeof config === "object", "Invalid runtime config");
+  } catch {
+    throw new Error("Invalid reserved runtime compose file; diagnostics withheld");
+  }
+  const corrected = yamlStringify(loopbackRuntime(config, target, data[0].Name as string));
+  if (corrected !== before) writeFileSync(path, corrected, { mode: 0o600 });
+  // Only these two proven services are reconciled on failure/resume, never the
+  // developer project or arbitrary resources from a process-name lookup.
+  await compose(target, [
+    "up",
+    "--detach",
+    "--no-deps",
+    "--wait",
+    "--wait-timeout",
+    "60",
+    "postgres",
+    "traefik",
+  ]);
+  if (registered) await guard();
+}
+
+async function start(target: Target) {
+  try {
+    await commandAsync(
+      "nhost",
+      [
+        "--root-folder",
+        join(state, "project"),
+        "--nhost-folder",
+        join(state, "project", "nhost"),
+        "--dot-nhost-folder",
+        join(state, "runtime"),
+        "--project-name",
+        definition.project,
+        "--local-subdomain",
+        definition.subdomain,
+        "--branch",
+        "disposable",
+        "up",
+        "--disable-tls",
+        "--http-port",
+        `${definition.httpPort}`,
+        "--postgres-port",
+        `${definition.postgresPort}`,
+      ],
+      { timeoutMs: 300_000 },
+    );
+  } finally {
+    // Also runs on timeout/SIGINT/SIGTERM, after all owned CLI descendants exit.
+    // nhost 1.51.2 can overwrite loopback bindings and can return zero on error.
+    await repairRuntime(target);
+  }
+  await compose(target, ["up", "--detach", "--wait", "--wait-timeout", "120"]);
 }

@@ -1,4 +1,5 @@
 import { setFacilitator } from "../backend/scripts/facilitator.ts";
+import { connectDeveloper, developerAccountId } from "../backend/tests/lib/developer.ts";
 import { connectLocalOperator } from "../backend/tests/lib/operator-db.ts";
 import { assert, main } from "../backend/tests/lib/process.ts";
 import { connect, guard, locked } from "../backend/tests/lib/target.ts";
@@ -8,15 +9,23 @@ await main(async () => {
   assert(
     (action === "grant" || action === "revoke") &&
       id &&
-      ["--test-target", "--local-database"].includes(target) &&
+      ["--test-target", "--local-database", "--developer"].includes(target) &&
       !extra.length,
-    "Usage: pnpm facilitator <grant|revoke> <account-uuid> <--test-target|--local-database>",
+    "Usage: pnpm facilitator <grant|revoke> <account-uuid|developer-email> <--test-target|--local-database|--developer>",
   );
   const run = async () => {
     const db =
-      target === "--test-target" ? await connect(await guard()) : await connectLocalOperator();
+      target === "--test-target"
+        ? await connect(await guard())
+        : target === "--developer"
+          ? await connectDeveloper()
+          : await connectLocalOperator();
     try {
-      await setFacilitator(db, id, action);
+      await setFacilitator(
+        db,
+        target === "--developer" ? await developerAccountId(db, id) : id,
+        action,
+      );
     } finally {
       await db.end();
     }

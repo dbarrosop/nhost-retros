@@ -265,6 +265,7 @@ describe("facilitator reflection board", () => {
       user = userEvent.setup();
     await screen.findByText("Alice");
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await act(async () => window.dispatchEvent(new Event("offline")));
     await user.selectOptions(screen.getByRole("combobox"), "keep");
     expect(await screen.findByRole("alert")).toHaveTextContent(groupingFailed);
     expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(false);
@@ -272,6 +273,12 @@ describe("facilitator reflection board", () => {
     await user.click(screen.getByRole("button", { name: "Add topic" }));
     await waitFor(() => expect(screen.getAllByRole("alert")).toHaveLength(2));
     expect(screen.getByLabelText("New topic")).toHaveValue("Keep this theme");
+    await act(async () => window.dispatchEvent(new Event("online")));
+    expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(false);
+    // The navigator hint is still false, but Query's online event allows a new intent.
+    await user.selectOptions(screen.getByRole("combobox"), "keep");
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("keep"));
+    expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(true);
     app.queries.clear();
   });
 });

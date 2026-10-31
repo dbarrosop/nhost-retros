@@ -3,7 +3,7 @@ import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
-import { expect, newContext, test } from "./fixtures";
+import { browserGraphql, expect, newContext, test } from "./fixtures";
 
 async function seed(context: BrowserContext, fixture: Actor) {
   const claims = JSON.parse(
@@ -31,6 +31,7 @@ test("two people keep multiple private cards; closure rejects a stale draft with
   test.setTimeout(120_000);
   const target = await guard(),
     group = await newGroup(target);
+  const graphqlUrl = browserGraphql(target);
   const alice = await actor(group),
     bob = await actor(group),
     manager = await actor(group);
@@ -139,14 +140,14 @@ test("two people keep multiple private cards; closure rejects a stale draft with
     let activeSnapshot: unknown;
     page.on("response", async (response) => {
       if (
-        response.url() === target.endpoints.graphql &&
+        response.url() === graphqlUrl &&
         !stale &&
         response.request().postDataJSON()?.query.startsWith("query Session(")
       ) {
         activeSnapshot = await response.json();
       }
     });
-    await page.route(target.endpoints.graphql, (route) => {
+    await page.route(graphqlUrl, (route) => {
       const query = route.request().postDataJSON().query as string;
       return stale && query.startsWith("query Session(")
         ? route.fulfill({ json: activeSnapshot })

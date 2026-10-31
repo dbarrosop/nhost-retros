@@ -22,17 +22,48 @@ export function command(file: string, args: string[], input?: string, timeout = 
 }
 
 // Test assertions must use sanitized messages, never token/password value matchers.
-export function runProcess(
+type ProcessOptions = { env?: NodeJS.ProcessEnv; timeoutMs?: number; killGraceMs?: number };
+
+// Captured CLI output is private, unlike the intentionally sanitized suite output.
+export async function commandAsync(
   file: string,
   args: string[],
-  { env = process.env, timeoutMs = 600_000, killGraceMs = 5000 } = {},
-): Promise<void> {
+  options: ProcessOptions = {},
+): Promise<string> {
+  try {
+    return await ownedProcess(file, args, { ...options, capture: true });
+  } catch (error) {
+    throw new Error(`${file} failed (${(error as Error).message}); output withheld`);
+  }
+}
+
+export async function runProcess(file: string, args: string[], options: ProcessOptions = {}) {
+  try {
+    await ownedProcess(file, args, options);
+  } catch (error) {
+    throw new Error(`Test suite failed (${(error as Error).message})`);
+  }
+}
+
+function ownedProcess(
+  file: string,
+  args: string[],
+  { env = process.env, timeoutMs = 600_000, killGraceMs = 5000, capture = false } = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
     // A finite runner-owned process group, not a persistent/background service.
     // Killing only pnpm leaves Playwright and its Vite server holding the stack lock.
-    const child = spawn(file, args, { cwd: repo, env, stdio: "inherit", detached: true });
+    const child = spawn(file, args, {
+      cwd: repo,
+      env,
+      stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
+      detached: true,
+    });
+    const output: Buffer[] = [];
+    let bytes = 0;
     let failure: string | undefined;
     let terminating = false;
+    let groupsSignalled = false;
     let closed = false;
     let finished = false;
     let escalation: ReturnType<typeof setTimeout> | undefined;
@@ -74,8 +105,8 @@ export function runProcess(
       clearTimeout(escalation);
       process.off("SIGINT", interrupt);
       process.off("SIGTERM", terminate);
-      if (failure) reject(new Error(`Test suite failed (${failure})`));
-      else resolve();
+      if (failure) reject(new Error(failure));
+      else resolve(Buffer.concat(output).toString("utf8"));
     };
     const stop = () => {
       if (terminating) return;
@@ -86,15 +117,23 @@ export function runProcess(
       } catch {
         failure ??= "unable to inspect runner process groups";
       }
-      if (!signalGroups("SIGTERM")) {
-        if (closed || !child.pid) finish();
+      groupsSignalled = signalGroups("SIGTERM");
+      if (!groupsSignalled && (closed || !child.pid)) {
+        finish();
         return;
       }
-      // Even if pnpm exits first, reap resistant descendants before returning.
+      // Even if the original group has exited, retained pipes get a hard cap.
+      // Normal close can still finish immediately when no group needs cleanup.
+      // Otherwise reap resistant captured descendants before returning.
       escalation = setTimeout(() => {
         signalGroups("SIGKILL");
         escalation = undefined;
-        if (closed) finish();
+        // Escaped/inherited pipes must not keep the owner/lock alive after the
+        // hard deadline. No output is relayed; close our pipe ends explicitly.
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.unref();
+        finish();
       }, killGraceMs);
     };
     const interrupt = () => {
@@ -115,11 +154,28 @@ export function runProcess(
       failure = "unable to start runner; diagnostics withheld";
       stop();
     });
+    for (const [stream, collect] of [
+      [child.stdout, true],
+      [child.stderr, false],
+    ] as const) {
+      stream?.on("data", (chunk: Buffer) => {
+        bytes += chunk.length;
+        if (bytes > 32 * 1024 * 1024) {
+          failure = "output limit exceeded";
+          stop();
+        } else if (collect) output.push(chunk);
+      });
+    }
+    // exit precedes close: a grandchild can hold inherited pipes open indefinitely.
+    child.once("exit", (code, signal) => {
+      if (code !== 0) failure ??= `exit ${code ?? signal}`;
+      stop();
+    });
     child.once("close", (code, signal) => {
       closed = true;
       if (code !== 0) failure ??= `exit ${code ?? signal}`;
       if (terminating) {
-        if (!escalation) finish();
+        if (!escalation || !groupsSignalled) finish();
       } else stop();
     });
   });

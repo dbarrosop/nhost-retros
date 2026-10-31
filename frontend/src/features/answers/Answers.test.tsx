@@ -185,11 +185,13 @@ describe("private reflection cards", () => {
     expect(mutations()).toHaveLength(0);
     fireEvent.change(input, { target: { value: "😀".repeat(4000) } });
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    await act(async () => window.dispatchEvent(new Event("offline")));
     await user.click(screen.getByRole("button", { name: "Add card to question 1" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("This change wasn’t saved");
     expect(mutations()).toHaveLength(0);
     expect(input).toHaveValue("😀".repeat(4000));
-    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    // The event, not navigator's false LAN hint, enables a fresh explicit write.
+    await act(async () => window.dispatchEvent(new Event("online")));
     await user.click(screen.getByRole("button", { name: "Add card to question 1" }));
     await waitFor(() => expect(mutations()).toHaveLength(1));
     await waitFor(() => expect(input).toHaveValue(""));

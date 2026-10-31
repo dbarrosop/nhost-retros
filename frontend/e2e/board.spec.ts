@@ -4,7 +4,7 @@ import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
-import { expect, newContext, test } from "./fixtures";
+import { browserGraphql, expect, newContext, test } from "./fixtures";
 
 async function seed(context: BrowserContext, fixture: Actor) {
   const claims = JSON.parse(
@@ -33,6 +33,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
   test.setTimeout(120_000);
   const target = await guard(),
     group = await newGroup(target);
+  const graphqlUrl = browserGraphql(target);
   const manager = await actor(group),
     alice = await actor(group);
   const db = await connect(target);
@@ -85,7 +86,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     const participantBoardRequests: string[] = [];
     participant.on("request", (request) => {
       if (
-        request.url() === target.endpoints.graphql &&
+        request.url() === graphqlUrl &&
         request.postDataJSON()?.query.startsWith("query QuestionBoard")
       )
         participantBoardRequests.push("board");
@@ -134,7 +135,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     // A real poll completes during the gesture, but cannot replace the held board.
     const refreshed = page.waitForResponse(
       (response) =>
-        response.url() === target.endpoints.graphql &&
+        response.url() === graphqlUrl &&
         response.request().postDataJSON()?.query.startsWith("query QuestionBoard"),
     );
     await db.query("INSERT INTO retro_topics(question_id,name) VALUES($1,'Arrived during drag')", [
@@ -200,7 +201,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
         questionId,
       ])
     ).rows[0].id;
-    await page.route(target.endpoints.graphql, async (route) => {
+    await page.route(graphqlUrl, async (route) => {
       if (route.request().postDataJSON()?.query.startsWith("mutation MoveAnswer")) {
         await db.query("DELETE FROM retro_topics WHERE id=$1", [keep]);
       }
@@ -213,7 +214,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       page.getByRole("region", { name: "Improve", exact: true }).getByRole("article"),
     ).toHaveCount(1);
     await expect(select()).toBeFocused();
-    await page.unroute(target.endpoints.graphql);
+    await page.unroute(graphqlUrl);
     await select().selectOption("ungrouped");
     await expect(select()).toHaveValue("ungrouped");
     await expect(select()).toBeFocused();

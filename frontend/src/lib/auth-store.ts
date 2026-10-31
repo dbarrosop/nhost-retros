@@ -1,5 +1,5 @@
 import type { NhostClient, StoredSession } from "@nhost/nhost-js";
-import type { QueryClient } from "@tanstack/react-query";
+import { onlineManager, type QueryClient } from "@tanstack/react-query";
 import { clearPrivateQueries } from "./query-client";
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -18,7 +18,7 @@ export function eligible(session: StoredSession | null): session is StoredSessio
 export function authMessage(error: unknown, verifying = false) {
   const status = (error as { status?: number })?.status;
   if (status === 429) return "Too many attempts. Please wait a few minutes before trying again.";
-  if (!navigator.onLine || !status)
+  if (!onlineManager.isOnline() || !status)
     return "We couldn’t connect. Check your connection and try again.";
   return verifying
     ? "That code is invalid, expired or already used. Try again or request a new code."
@@ -106,7 +106,7 @@ export class AuthStore {
     if (
       this.running &&
       session?.decodedToken.exp &&
-      navigator.onLine &&
+      onlineManager.isOnline() &&
       document.visibilityState === "visible"
     ) {
       this.refreshTimer = setTimeout(
@@ -159,13 +159,12 @@ export class AuthStore {
       this.emit(this.client.getUserSession());
     };
     const focus = () => {
-      if (document.visibilityState === "visible" && navigator.onLine) void this.refresh();
+      if (document.visibilityState === "visible" && onlineManager.isOnline()) void this.refresh();
       else clearTimeout(this.refreshTimer);
     };
     window.addEventListener("storage", sync);
     window.addEventListener("focus", focus);
-    window.addEventListener("online", focus);
-    window.addEventListener("offline", focus);
+    const unsubscribeOnline = onlineManager.subscribe(focus);
     document.addEventListener("visibilitychange", focus);
     void this.refresh();
     return () => {
@@ -178,15 +177,14 @@ export class AuthStore {
       this.dataController = new AbortController();
       window.removeEventListener("storage", sync);
       window.removeEventListener("focus", focus);
-      window.removeEventListener("online", focus);
-      window.removeEventListener("offline", focus);
+      unsubscribeOnline();
       document.removeEventListener("visibilitychange", focus);
     };
   }
   async refresh() {
     if (this.signingOut) return;
     if (this.refreshTask) return this.refreshTask;
-    if (!navigator.onLine || document.visibilityState !== "visible") {
+    if (!onlineManager.isOnline() || document.visibilityState !== "visible") {
       this.emit(
         this.client.getUserSession(),
         true,

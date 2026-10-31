@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { onlineManager, useMutation } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { useDrafts } from "../../lib/drafts";
 import { type AppRole, changeFailed, requireAffected, useRetroApi } from "../../lib/retro-api";
@@ -18,7 +18,7 @@ export function useChange(role: AppRole) {
       variables: Record<string, unknown>;
       field: string;
     }) => {
-      if (!navigator.onLine) throw new Error(changeFailed);
+      if (!onlineManager.isOnline()) throw new Error(changeFailed);
       const result = await api.request<Record<string, { affected_rows: number }>>(query, variables);
       requireAffected(result[field]);
     },

@@ -9,6 +9,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import { onlineManager } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
 import { readFailed, requireAffected, useRetroApi, useRetroQuery } from "../../lib/retro-api";
@@ -141,7 +142,8 @@ export function BoardWorkspace({
   }, [focus, held]);
 
   async function change(document: string, variables: Record<string, unknown>, field: string) {
-    if (locked.current || !board || busy || !navigator.onLine) throw new Error(groupingFailed);
+    if (locked.current || !board || busy || !onlineManager.isOnline())
+      throw new Error(groupingFailed);
     locked.current = true;
     setPending(true);
     setHeld(board);
@@ -153,7 +155,7 @@ export function BoardWorkspace({
       requireAffected(result[field]);
     } finally {
       // Keep the displayed snapshot still until the authoritative replacement is ready.
-      if (navigator.onLine) await api.invalidate();
+      if (onlineManager.isOnline()) await api.invalidate();
       else void api.invalidate();
       locked.current = false;
       setPending(false);
@@ -188,7 +190,7 @@ export function BoardWorkspace({
       } else setNotice(`Card ${number} remains in ${columnName(current)}.`);
     } catch {
       setError(groupingFailed);
-      if (navigator.onLine) await api.invalidate();
+      if (onlineManager.isOnline()) await api.invalidate();
     } finally {
       setHeld(null);
       setFocus(focusId);

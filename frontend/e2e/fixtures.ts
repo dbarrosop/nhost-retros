@@ -1,36 +1,13 @@
-import { type Browser, type BrowserContext, test as base, expect } from "@playwright/test";
+import { type Browser, test as base, expect } from "@playwright/test";
+import { e2eEndpoint } from "../../backend/tests/lib/runner-options";
+import type { Target } from "../../backend/tests/lib/target";
+import { publicAssets } from "./public-assets";
 
-async function publicAssets(context: BrowserContext) {
-  // Linux Chromium can abort Vite entry modules with ERR_NETWORK_CHANGED before
-  // React boots. Only public localhost GET assets use the runner's transport.
-  // API traffic never matches this origin and remains real browser networking.
-  await context.route("http://localhost:5173/**", async (route) => {
-    const request = route.request();
-    // The document stays on Chromium's transport too: it must establish the
-    // real loopback address space for local-network/CORS enforcement.
-    if (
-      request.method() !== "GET" ||
-      !["script", "stylesheet", "font", "image"].includes(request.resourceType())
-    )
-      return route.continue();
-    const page = request.frame().page();
-    try {
-      const response = await route.fetch({
-        // Never forward browser cookies, Authorization or other private headers.
-        headers: { accept: "*/*", authorization: "", cookie: "" },
-        maxRedirects: 0,
-        maxRetries: 0,
-        timeout: 10_000,
-      });
-      await route.fulfill({ response });
-    } catch {
-      // A redirect/navigation may retire optional Vite/HMR imports after the app
-      // has rendered. Likewise timeout teardown closes in-flight routes. Only
-      // those browser-confirmed cancellations are benign; real failures surface.
-      if (page.isClosed() || request.failure()?.errorText === "net::ERR_ABORTED") return;
-      throw new Error(`Local Vite asset unavailable: ${new URL(request.url()).pathname}`);
-    }
-  });
+export function browserGraphql(target: Target) {
+  const endpoint = e2eEndpoint(target, process.env.RETRO_TEST_GRAPHQL_ENGINE);
+  if (process.env.VITE_NHOST_GRAPHQL_URL !== endpoint)
+    throw new Error("Browser/API acceptance endpoint mismatch; use pnpm test:e2e");
+  return endpoint;
 }
 
 export async function newContext(browser: Browser, options: Parameters<Browser["newContext"]>[0]) {

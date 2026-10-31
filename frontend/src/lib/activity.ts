@@ -1,21 +1,21 @@
+import { onlineManager } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
 
-// Read browser state directly: a disabled interval alone will not restart when a
-// hidden tab becomes visible, and Query does not cancel an already-running read.
+// Share Query's optimistic, event-driven connectivity model. navigator.onLine
+// can report false on reachable LAN/loopback networks and must not block boot.
+// Visibility still cancels pending reads and restarts intervals on foregrounding.
 function snapshot() {
-  return !navigator.onLine
+  return !onlineManager.isOnline()
     ? "offline"
     : document.visibilityState === "visible"
       ? "active"
       : "hidden";
 }
 function subscribe(notify: () => void) {
-  window.addEventListener("online", notify);
-  window.addEventListener("offline", notify);
+  const unsubscribe = onlineManager.subscribe(notify);
   document.addEventListener("visibilitychange", notify);
   return () => {
-    window.removeEventListener("online", notify);
-    window.removeEventListener("offline", notify);
+    unsubscribe();
     document.removeEventListener("visibilitychange", notify);
   };
 }

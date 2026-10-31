@@ -3,7 +3,7 @@ import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
-import { expect, newContext, test } from "./fixtures";
+import { browserGraphql, expect, newContext, test } from "./fixtures";
 
 async function seed(context: BrowserContext, fixture: Actor) {
   // Process memory -> browser memory only. No JWT-bearing call logs/storageState files.
@@ -31,6 +31,7 @@ test("participants browse; trusted facilitators manage questions and permanently
 }) => {
   test.setTimeout(120_000);
   const target = await guard();
+  const graphqlUrl = browserGraphql(target);
   const group = await newGroup(target);
   const manager = await actor(group);
   const participant = await actor(group);
@@ -93,8 +94,7 @@ test("participants browse; trusted facilitators manage questions and permanently
     const reader = await readerContext.newPage();
     const readerRoles: string[] = [];
     reader.on("request", (request) => {
-      if (request.url() === target.endpoints.graphql)
-        readerRoles.push(request.headers()["x-hasura-role"]);
+      if (request.url() === graphqlUrl) readerRoles.push(request.headers()["x-hasura-role"]);
     });
     await reader.goto(`/sessions/${sessionId}`);
     await expect(

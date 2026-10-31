@@ -28,6 +28,7 @@ If pnpm is not installed, enable Corepack with `corepack enable` first.
 
 ```sh
 pnpm install --frozen-lockfile
+# Choose the backend preparation path below before starting the frontend.
 pnpm dev
 ```
 
@@ -35,6 +36,38 @@ Open <http://localhost:5173>. Vite binds to localhost and **fails** if port 5173
 occupied rather than silently selecting another port. Stop it with Ctrl+C.
 `pnpm --filter @retro/frontend preview` serves the production build on the same
 strict port, after `pnpm build` and with the dev server stopped.
+
+Choose the backend path before setup:
+
+- **Fresh Nhost stack:** `nhost up` with this checkout already applies the app
+  migrations/metadata. Skip `local:apply`; proceed to `pnpm dev` and onboarding.
+  If run anyway, its “CLI-applied local migration lacks a verified checksum”
+  refusal is expected and harmless: nothing needs adoption or reconciliation
+  solely because this helper has never run.
+- **Existing pre-migration stack:** run `pnpm local:apply` before `pnpm dev` to
+  add the app without resetting developer data. Do not restart it with `nhost up`
+  first.
+
+`pnpm local:apply` prepares that existing developer backend, not the test
+stack. It preserves data, takes restricted backups, records migration checksums,
+merges only retro metadata and refreshes Constellation. It never resets volumes
+or runs down SQL. It requires this repository's running `backend-*` project on
+HTTPS 443/Postgres 5432; no database URL or admin secret needs to be pasted.
+
+Create/verify your exact `@nhost.io` account in the app. Retrieve the OTP from
+<https://local.mailhog.local.nhost.run> (local mail capture, no external SMTP).
+Then a trusted local operator can bootstrap facilitation from repo root:
+
+```sh
+pnpm facilitator grant you@nhost.io --developer
+# Refresh/sign in again, then use “Facilitator workspace”.
+# To revoke: pnpm facilitator revoke you@nhost.io --developer
+```
+
+Account creation is still explicit; the helper never creates users or grants an
+ineligible account. See [developer setup details](docs/operations.md#developer-local-setup-no-reset)
+for backups, safe retries and limitations. No persistent frontend server is
+started by setup.
 
 ### Public configuration
 
@@ -72,7 +105,8 @@ long-text/mobile layout and axe checks without serious/critical findings. Contro
 connections prove both closure lock orders and rollback behavior. Backend unit tests exercise target
 guards, operator loopback connections, occupied ports, budgets and metadata loading.
 CI also provisions the isolated stack and executes the real-JWT, scratch-migration
-and Playwright gates, with matching Nix browsers.
+and Playwright gates. Hosted acceptance uses pinned native CLI/Node/pnpm and
+npm-matched browsers to avoid cold Nix source builds; local Nix remains supported.
 
 ### Disposable backend and browser acceptance
 
@@ -82,8 +116,9 @@ A running local Docker daemon is required. From the repo root, inside `nix devel
 pnpm test:target provision
 pnpm test:target health
 pnpm test:migrations
-pnpm test:backend
-pnpm test:e2e
+pnpm test:backend                       # real JWTs on both GraphQL engines
+pnpm test:e2e                           # canonical Constellation
+pnpm test:e2e --engine hasura            # full second-engine browser acceptance
 # Only when finished with this disposable stack:
 pnpm test:target destroy
 ```
@@ -119,3 +154,7 @@ alone does not separate words in the computed accessible name checked by tests.
 See [docs/decisions.md](docs/decisions.md) for implementation choices. Production
 hosting/onboarding is deferred: it requires operator-supplied frontend URLs and
 custom SMTP configuration/capacity review. No production values are assumed here.
+[Operations](docs/operations.md) covers static-host fallback, backend-first rollout,
+backups, safe rollback and retained-account constraints; [local acceptance
+evidence](docs/acceptance.md) records the fresh disposable replay. CI runs isolated
+Hasura/Constellation acceptance lanes, never the developer stack.

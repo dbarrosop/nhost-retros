@@ -1,6 +1,7 @@
 import { createNhostClient } from "@nhost/nhost-js";
 import type { Session } from "@nhost/nhost-js/auth";
 import { MemoryStorage } from "@nhost/nhost-js/session";
+import { onlineManager } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthStore, authMessage, companyEmail, eligible, normalizeEmail } from "./auth-store";
 import { authQueryKey, createQueryClient } from "./query-client";
@@ -59,6 +60,35 @@ afterEach(() => {
 });
 
 describe("auth lifecycle", () => {
+  it("restores and retries with a false navigator hint; online events, not the hint, resume Auth", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    onlineManager.setOnline(true);
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession());
+    const refresh = vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(store.getSnapshot().canQuery).toBe(true);
+      refresh.mockRejectedValueOnce(new TypeError("LAN transport interruption"));
+      await store.refresh();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(refresh).toHaveBeenCalledTimes(3);
+      window.dispatchEvent(new Event("offline"));
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(refresh).toHaveBeenCalledTimes(3);
+      window.dispatchEvent(new Event("online"));
+      await store.refresh();
+      expect(refresh).toHaveBeenCalledTimes(4);
+      expect(navigator.onLine).toBe(false);
+      expect(store.getSnapshot().canQuery).toBe(true);
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
   it("restores a seeded facilitator through StrictMode start/cleanup/start with a queued Web Lock", async () => {
     sessionLocks();
     const { client, store, queries } = setup();
@@ -143,6 +173,7 @@ describe("auth lifecycle", () => {
       expect(store.getSnapshot().canQuery).toBe(false);
       visibility.mockReturnValue("visible");
       const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+      window.dispatchEvent(new Event("offline"));
       document.dispatchEvent(new Event("visibilitychange"));
       await vi.advanceTimersByTimeAsync(30_000);
       expect(refresh).toHaveBeenCalledTimes(1);

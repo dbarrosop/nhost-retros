@@ -359,3 +359,107 @@
   and Vite keep running. Context cleanup in test `finally` blocks is best-effort
   because timeout teardown may already have closed the browser; it must not mask
   the original failing locator.
+
+## Phase 9 — Replayable operational acceptance
+
+- **Exercise both engines in the browser, not just metadata/API probes.** CI runs
+  independent fresh-stack Hasura/Constellation lanes; each retains the complete
+  dual-engine JWT suite, scratch rollback/reapply, and desktop/mobile journeys.
+  `pnpm test:e2e` defaults to Constellation; the only alternate is the registered
+  Hasura endpoint via `--engine hasura`. Shared endpoint resolution also aligns
+  privacy/stale-response interceptors with the actual SPA URL. No arbitrary URL
+  override, second application client or production endpoint switch was added.
+- **Refuse ambiguous destructive commands.** Target, backend and migration
+  commands now reject unused target/path arguments before touching a stack.
+  Previously an extra argument could be ignored while operating on the registered
+  target, which is safe from developer resets but misleading to the operator.
+  Wrapper-level tests prove rejected registration prevents SQL, metadata, Auth,
+  browser startup and filesystem deletion. Existing real guard tests retain the
+  independent Docker/database-identity checks; mocks do not replace those gates.
+- **Replay only disposable data; retain production content.** Final acceptance
+  exercised guarded stop/resume/destroy/fresh-provision, a different database
+  identity, both-engine permissions/races and all browser journeys. The existing
+  developer container identities stayed unchanged through that disposable replay.
+  The separate additive developer setup later refreshed only Constellation.
+  Operational documentation
+  distinguishes compatible frontend/metadata rollback from destructive scratch
+  `down.sql`, and explicitly defers production URL/SMTP choices and account
+  retention/deletion to reviewed operator procedures. No deployment, role grant
+  to developer users, developer reset, or production configuration edit occurred.
+- **Make Nix checks observable.** CI builds the named format/tool-version checks
+  as well as running `nix flake check`, because an earlier local invocation
+  reported zero checks. One invocation ran all three; explicit named
+  aarch64-linux derivations also built successfully. CI's x86_64-linux lane
+  remains configured, not locally executed.
+- **Developer setup is additive, not a disposable-target exception.** The final
+  handoff additionally prepares the existing HTTPS developer backend through
+  `pnpm local:apply`: fixed Docker/config/DB identity checks, restricted streamed
+  backups, advisory locking, transactional up/checksum history, app-only metadata
+  merge with resource-version protection and only Constellation recreation.
+  Existing Auth/storage data fingerprints and non-retro metadata were preserved.
+  No down/reset path or developer-target registration was added. Unknown history
+  fails for explicit reconciliation instead of guessed adoption. The trusted
+  `--developer` facilitator shortcut resolves an existing verified email without
+  exposing credentials or creating an operator account. Standard CLI versions are
+  mirrored only after checksum-verified SQL commits using `--skip-execution`,
+  with status verification: pinned `nhost up` otherwise automatically replays
+  unrecorded migrations. Conversely, `nhost up` can apply a new migration before
+  this helper sees it. Setup therefore reads/parses CLI status through the
+  validated console before SQL/backup creation and validates the entire checksum
+  history before executing any migration. A CLI-applied version without a
+  verified ledger checksum fails closed: no transaction, backfill replay, ledger
+  insert or automatic adoption. It needs explicit, backed-up operator
+  reconciliation, not a reset. Verified ledger entries still skip SQL when CLI
+  mirroring is pending. Regression tests cover both history directions and
+  missing/ambiguous/dirty CLI status before any DB connection or backup.
+  The parent owns starting the persistent frontend after review.
+- **Use native tools for hosted acceptance; keep Nix as a separate gate.** A cold
+  `nix develop` could source-build the development toolchain before any acceptance
+  test ran. Hosted lanes now use Node/pnpm pins, checksum-pinned official CLI
+  archives matching the locked flake and npm-matched Playwright browsers.
+  The arm64 installer and amd64 archive digest were validated locally; no hosted
+  execution or deployment was claimed. Local Nix workflows remain unchanged.
+- **Connectivity is one optimistic event model.** Auth, activity notices, reads
+  and mutation guards now share TanStack `onlineManager`, initially online and
+  driven by browser events rather than `navigator.onLine`. A false LAN hint must
+  not permanently gate reachable loopback services. Real offline events still
+  stop/cancel reads and suppress queued writes; online events resume them even
+  when the hint remains false. Auth retry/expiry/cancellation privacy contracts
+  are unchanged. Regression tests cover cold restoration, refresh retry,
+  foreground reads and fresh card/board writes under that false hint.
+- **Final handoff scope expansion was explicit.** Parent-requested developer
+  readiness, native hosted tooling and carried-forward connectivity hardening
+  extend the initial Phase 9 runner/docs file list. They add no app service,
+  deployment, production setting or persistent process. All suites were rerun;
+  each engine's final browser run took 3.9 minutes, below the unchanged
+  eight-minute global and ten-minute outer caps.
+- **Own CLI descendants, not just the direct PID.** Review reproduced a hung
+  `execFileSync` startup beyond its timeout because inherited pipes stayed open.
+  Nhost/Compose now use bounded async process groups, TERM/KILL cleanup and
+  explicit pipe closure; exit is handled before pipe-close. Startup always
+  repairs/rebinds its reserved runtime, even on failure, and first provisioning
+  also owns the runner lock. Fake slow/pipe-holding descendants cover timeout,
+  exit and both interrupt signals. No background launcher or broad process kill
+  was introduced.
+- **Recover proven partial state without relaxing normal guards.** Resume first
+  checks registration/labels/ports and the actual existing data volume, rewrites
+  only the generated loopback bindings idempotently, starts the proven
+  Postgres/Traefik services and requires the unchanged strict identity/network
+  guards before app work. A running DB proves identity before repair; a stopped
+  one immediately after startup. The same bounded repair runs after failed
+  `nhost up`; automatic CLI down-on-error is omitted to retain ownership
+  evidence. Mismatched identity, labels, ports or volumes still fail closed.
+- **Fresh CLI-created stacks need no additive helper.** `nhost up` with this
+  checkout already applies app SQL/metadata. Its CLI-only history must not be
+  adopted into the helper ledger; an optional `local:apply` refusal there is
+  expected and harmless. Only the pre-migration developer stack needs the
+  additive path. Unexpected mixed histories still require backed-up operator
+  reconciliation, never resetting or replaying SQL.
+- **Distinguish public-asset teardown from transport failure.** A final browser
+  gate exposed an intermittent pending Vite asset error. A finite browser
+  diagnostic demonstrated that context disposal rejects `route.fetch` with
+  `Request context disposed.` while request failure is unset. The public-only
+  asset bridge recognizes that explicit lifecycle cancellation independently
+  of page-close events; genuine transport failures still fail, credentials
+  stay stripped and no retries were added. Seven unit cases exercise the
+  bridge; both complete browser engine suites passed afterward.

@@ -1,4 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
 import { type ReactNode, StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +40,34 @@ afterEach(() => {
 });
 
 describe("foreground query lifecycle", () => {
+  it("boots, polls and mutates with a false navigator hint, sharing Query's online event state", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    onlineManager.setOnline(true);
+    const app = setup();
+    const hook = renderHook(
+      () => ({
+        read: useRetroQuery<{ value: string }>("user", ["lan"], "query LAN { value }"),
+        api: useRetroApi("user"),
+      }),
+      app,
+    );
+    await advance();
+    expect(hook.result.current.read.data?.value).toBe("authorized");
+    const first = app.fetcher.mock.calls.length;
+    await advance(2000);
+    expect(app.fetcher).toHaveBeenCalledTimes(first + 1);
+    await hook.result.current.api.request("mutation LAN { value }");
+    await act(async () => window.dispatchEvent(new Event("offline")));
+    const offline = app.fetcher.mock.calls.length;
+    await advance(6000);
+    expect(app.fetcher).toHaveBeenCalledTimes(offline);
+    await act(async () => window.dispatchEvent(new Event("online")));
+    await advance();
+    expect(app.fetcher).toHaveBeenCalledTimes(offline + 1);
+    expect(navigator.onLine).toBe(false);
+    hook.unmount();
+    app.client.clear();
+  });
   it("polls every two seconds, cancels hidden/offline reads, resumes immediately and stops on unmount", async () => {
     const app = setup();
     const hook = renderHook(

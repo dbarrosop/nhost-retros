@@ -225,7 +225,7 @@ export async function synchronizeMetadata(target: Target) {
   cpSync(join(repo, "backend/nhost/metadata"), join(state, "project/nhost/metadata"), {
     recursive: true,
   });
-  compose(target, [
+  await compose(target, [
     "up",
     "--detach",
     "--no-deps",

@@ -3,7 +3,7 @@ import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
-import { expect, newContext, test } from "./fixtures";
+import { browserGraphql, expect, newContext, test } from "./fixtures";
 
 function stored(fixture: Actor) {
   const claims = JSON.parse(
@@ -31,6 +31,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
   test.setTimeout(120_000);
   const target = await guard(),
     group = await newGroup(target);
+  const graphqlUrl = browserGraphql(target);
   const alice = await actor(group),
     first = await actor(group),
     second = await actor(group),
@@ -78,7 +79,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     let boardSnapshot: unknown;
     observer.on("response", async (response) => {
       if (
-        response.url() === target.endpoints.graphql &&
+        response.url() === graphqlUrl &&
         response.request().postDataJSON()?.query.startsWith("query QuestionBoard")
       )
         boardSnapshot = await response.json();
@@ -132,7 +133,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     await observer.clock.install();
     let reads = 0;
     observer.on("request", (request) => {
-      if (request.url() === target.endpoints.graphql) reads++;
+      if (request.url() === graphqlUrl) reads++;
     });
     await secondContext.setOffline(true);
     await expect(observer.getByRole("status", { name: "Workspace connection" })).toContainText(
@@ -211,7 +212,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
       delivered = resolve;
     });
     let hold = true;
-    await observer.route(target.endpoints.graphql, async (route) => {
+    await observer.route(graphqlUrl, async (route) => {
       if (hold && route.request().postDataJSON()?.query.startsWith("query QuestionBoard")) {
         hold = false;
         captured();
