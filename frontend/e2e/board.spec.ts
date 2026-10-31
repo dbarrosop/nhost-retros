@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { type BrowserContext, expect, test } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
+import { expect, newContext, test } from "./fixtures";
 
 async function seed(context: BrowserContext, fixture: Actor) {
   const claims = JSON.parse(
@@ -35,7 +36,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
   const manager = await actor(group),
     alice = await actor(group);
   const db = await connect(target);
-  const participantContext = await browser.newContext({
+  const participantContext = await newContext(browser, {
     baseURL: "http://localhost:5173",
     viewport: page.viewportSize(),
   });
@@ -315,7 +316,8 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     expect(group.budget.email).toBe(0);
     expect(group.budget.signin).toBe(2);
   } finally {
-    await participantContext.close();
+    // Timeout teardown may already have closed it; keep the original failed step.
+    await Promise.allSettled([participantContext.close()]);
     await db.end();
     for (const fixture of [manager, alice]) await cleanupActor(target, fixture.id);
   }

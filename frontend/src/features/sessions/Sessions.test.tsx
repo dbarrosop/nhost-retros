@@ -13,7 +13,7 @@ import { createAppRouter } from "../../router";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const questionId = "22222222-2222-4222-8222-222222222222";
-function setup(facilitator: boolean, path: string) {
+function setup(facilitator: boolean, path: string, withCard = false) {
   const client = createNhostClient({ storage: new MemoryStorage(), configure: [] });
   const session: Session = {
     accessToken: `e30.${btoa(JSON.stringify({ sub: "test", exp: Date.now() / 1000 + 900 }))}.test`,
@@ -79,7 +79,19 @@ function setup(facilitator: boolean, path: string) {
         ? Response.json({ errors: [{ message: "private engine details" }] })
         : Response.json({
             data: body.query.includes("MyAnswers")
-              ? { retroAnswers: [] }
+              ? {
+                  retroAnswers: withCard
+                    ? [
+                        {
+                          id: "answer",
+                          questionId,
+                          text: "A saved card",
+                          createdAt: "2026-10-01",
+                          updatedAt: "2026-10-01",
+                        },
+                      ]
+                    : [],
+                }
               : body.query.includes("query QuestionBoard(")
                 ? {
                     retroQuestions: [
@@ -105,6 +117,9 @@ function setup(facilitator: boolean, path: string) {
   return {
     queries,
     store,
+    client,
+    session,
+    router,
     roles,
     requests,
     setEnded: () => {
@@ -122,11 +137,152 @@ function setup(facilitator: boolean, path: string) {
   };
 }
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("authorized retrospective workspace", () => {
+  it.each([
+    [false, "/sessions/not-a-uuid", "Session unavailable"],
+    [true, "/facilitate/not-a-uuid", "Session unavailable"],
+    [true, `/facilitate/not-a-uuid/questions/${questionId}`, "Session unavailable"],
+    [true, `/facilitate/${sessionId}/questions/not-a-uuid`, "Question unavailable"],
+  ] as const)(
+    "does not query or poll malformed route %s %s",
+    async (facilitator, path, heading) => {
+      vi.useFakeTimers();
+      const app = setup(facilitator, path);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole("heading", { name: heading })).toBeVisible();
+      expect(app.requests).toHaveLength(0);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6000);
+      });
+      expect(app.requests).toHaveLength(0);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      app.queries.clear();
+    },
+  );
+  it.each([false, true])(
+    "retains only unsaved same-account text across JWT expiry/recovery (board=%s)",
+    async (board) => {
+      const app = setup(
+        board,
+        board ? `/facilitate/${sessionId}/questions/${questionId}` : `/sessions/${sessionId}`,
+        !board,
+      );
+      const user = userEvent.setup();
+      const label = board ? "New topic" : "New card for question 1";
+      await screen.findByLabelText(label, { exact: true });
+      await waitFor(() => expect(screen.getByLabelText(label, { exact: true })).toBeEnabled());
+      await user.type(screen.getByLabelText(label, { exact: true }), "Keep this unsaved thought");
+      if (board) {
+        await user.click(screen.getByRole("button", { name: "Rename topic Keep" }));
+        await user.clear(screen.getByLabelText("Rename topic Keep", { exact: true }));
+        await user.type(
+          screen.getByLabelText("Rename topic Keep", { exact: true }),
+          "Retain my rename",
+        );
+      } else {
+        await user.click(screen.getByRole("button", { name: "Edit card 1 for question 1" }));
+        await user.clear(screen.getByLabelText("Edit card 1 for question 1", { exact: true }));
+        await user.type(
+          screen.getByLabelText("Edit card 1 for question 1", { exact: true }),
+          "Retain my edited answer",
+        );
+      }
+      const refresh = vi
+        .mocked(app.client.auth.refreshToken)
+        .mockRejectedValue(new TypeError("Offline"));
+      const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000_000);
+      await act(async () => {
+        await app.store.refresh();
+      });
+      expect(screen.getByText(/Workspace data is paused/)).toBeVisible();
+      expect(screen.getByRole("status", { name: "Workspace connection" })).toHaveTextContent(
+        "Live updates are paused",
+      );
+      expect(screen.getByRole("status", { name: "Workspace connection" })).not.toHaveTextContent(
+        "changes appear automatically",
+      );
+      expect(app.queries.getQueryCache().getAll()).toHaveLength(0);
+      expect(screen.queryByLabelText(label, { exact: true })).not.toBeInTheDocument();
+      now.mockRestore();
+      refresh.mockResolvedValue({ body: app.session, status: 200, headers: new Headers() });
+      await act(async () => {
+        await app.store.refresh();
+      });
+      expect(await screen.findByLabelText(label, { exact: true })).toHaveValue(
+        "Keep this unsaved thought",
+      );
+      expect(screen.getByRole("status", { name: "Workspace connection" })).toHaveTextContent(
+        "Live updates · changes appear automatically",
+      );
+      if (board)
+        expect(screen.getByLabelText("Rename topic Keep", { exact: true })).toHaveValue(
+          "Retain my rename",
+        );
+      else
+        expect(
+          await screen.findByLabelText("Edit card 1 for question 1", { exact: true }),
+        ).toHaveValue("Retain my edited answer");
+      app.queries.clear();
+    },
+  );
+  it("clears private role caches on route switches and discards drafts on account/role changes", async () => {
+    const app = setup(true, `/facilitate/${sessionId}/questions/${questionId}`);
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText("New topic"), "Private facilitator draft");
+    await act(async () => {
+      await app.router.navigate({ to: "/workspace" });
+    });
+    await screen.findByRole("heading", { name: "Retrospectives" });
+    expect(
+      app.queries
+        .getQueryCache()
+        .getAll()
+        .every((q) => q.queryKey[2] === "user"),
+    ).toBe(true);
+    await act(async () => {
+      await app.router.navigate({
+        to: "/facilitate/$sessionId/questions/$questionId",
+        params: { sessionId, questionId },
+      });
+    });
+    expect(await screen.findByLabelText("New topic")).toHaveValue("");
+    await user.type(screen.getByLabelText("New topic"), "Never for the next account");
+    const other = structuredClone(app.session);
+    if (other.user) {
+      other.user.id = "second";
+      other.user.email = "second@nhost.io";
+    }
+    await act(async () => {
+      app.client.sessionStorage.set(other);
+    });
+    expect(await screen.findByLabelText("New topic")).toHaveValue("");
+    expect(
+      app.queries
+        .getQueryCache()
+        .getAll()
+        .every((q) => q.queryKey[1] === "second"),
+    ).toBe(true);
+    if (other.user) other.user.roles = ["user", "me"];
+    await act(async () => {
+      app.client.sessionStorage.set(other);
+    });
+    await screen.findByRole("heading", { name: "Retrospectives" });
+    expect(screen.queryByLabelText("New topic")).not.toBeInTheDocument();
+    expect(
+      app.queries
+        .getQueryCache()
+        .getAll()
+        .every((q) => q.queryKey[2] === "user"),
+    ).toBe(true);
+    app.queries.clear();
+  });
   it("shows private-card participation without management controls and redirects facilitator guesses", async () => {
     const app = setup(false, `/facilitate/${sessionId}`);
     expect(

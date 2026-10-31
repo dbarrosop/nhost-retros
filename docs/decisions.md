@@ -280,3 +280,82 @@
   before an immediate synthetic Escape. Desktop mouse, mobile CDP touch, keyboard,
   native Move-to, stale-target rejection and axe scans exercise actual controls,
   rather than replacing the drag library with test-only callbacks.
+
+## Phase 8 — Foreground synchronization and privacy boundaries
+
+- **Browser activity is observable state.** Mounted authorized reads poll every
+  two seconds only while visible and online. Visibility/connectivity events both
+  disable future reads and cancel current reads; becoming active enables an
+  immediate stale refetch. Merely returning `false` from an interval callback
+  neither cancels a pending fetch nor reliably restarts the interval on visibility
+  changes. Focus/reconnect refresh and mutation invalidation still use the same
+  TanStack Query cache. A quiet workspace status explains session, offline and
+  background pauses; it never advertises live updates while private data is paused.
+- **Cancellation plus acceptance checks.** Each request has a route/hook lifetime
+  signal, and Auth owns a separate private-data signal. Identity, membership or
+  query-eligibility changes abort that signal and cancel/remove old queries.
+  Late responses are checked again against the auth generation and aborted signal,
+  even if a transport ignores cancellation. Route-level role changes remove the
+  other role's private queries. Auth also rejects pending refreshes when a
+  same-tab SDK account change arrives, not only on cross-tab storage events.
+  A dedicated expiry timer pauses data exactly at JWT expiry even if a refresh is
+  still pending. Hidden/offline tabs do not repeatedly refresh credentials; expiry
+  still clears their private cache, and foreground reconnection retries.
+- **Preserve intent without retaining expired server data.** A workspace-scoped
+  in-memory map retains only user-entered text across transient JWT-expiry remounts.
+  Stable entity IDs identify edited cards/questions/topics, not changing display
+  numbers/names. Account, membership, application-role or route changes replace
+  the map; success/Cancel or toggling a rename closed removes that form's draft.
+  Nothing is written to browser
+  storage. Same-account recovery restores editors while server responses are
+  fetched anew. Signout or authoritative session rejection discards drafts too:
+  shared-browser privacy takes precedence over cross-sign-in draft recovery.
+- **Permission results outrank gesture stability.** A successful empty board read
+  removes the private board even during a drag; holding geometry must not retain
+  data after access loss. Transient read failures still preserve mounted drafts
+  with sanitized feedback. Real independent browser contexts check card/topic/move
+  and closure propagation with five-second bounds, offline catch-up, an authentic
+  delayed response across signout/account replacement, and live membership/account
+  revocation. Controlled component clocks cover hidden/offline teardown and JWT
+  expiry without weakening Auth policy or spending extra OTP requests.
+- **Malformed links are unavailable resources, not connection failures.** Check
+  canonical UUID shape before mounting session or board queries and reuse their
+  unavailable states. Do not constrain UUID versions or variants: the database
+  accepts more than the currently generated UUID version. Neither GraphQL engine
+  accepts malformed UUID variables, so issuing these reads would otherwise produce
+  misleading connection/access alerts and retry/poll indefinitely.
+- **Keep intercepted JWT traffic in Chromium.** Playwright `route.fetch()` uses
+  Node DNS, not Chromium's `--host-resolver-rules`, and its network errors include
+  request headers. For delayed-response tests, capture successful browser response
+  JSON in memory and replay it through `route.fulfill({json})`; do not route real
+  JWTs through a Node client that may print Authorization headers on failure.
+- **Isolate public module transport, not application networking.** A blank
+  facilitator first load reproduced before React executed: `#root` was empty and
+  Chromium reported `net::ERR_NETWORK_CHANGED` for Vite's CSS, JSX runtime and
+  application module imports. Both pinned headless-shell and full Chromium
+  reproduced it; changing Auth/router code or browser channels would not fix
+  aborted entry modules. The browser fixture therefore fetches only localhost
+  script/style/font/image GETs from the real Vite server through Playwright's
+  runner transport, with empty Authorization/Cookie headers, no redirects and no
+  retries. Missing assets/server still fail. Documents, WebSockets and all
+  Auth/GraphQL traffic retain real Chromium networking; no app responses are
+  mocked, network notifications suppressed or acceptance bounds relaxed.
+  Documents must not be fulfilled by the runner: Chromium otherwise classifies
+  the origin as public and blocks loopback API access under local-network/CORS
+  enforcement. Keep a 24-fresh-context boot regression per project and sanitized
+  failure paths; never log storage, headers or private response bodies. Optional
+  Vite/HMR imports can outlive the first app render and be retired by navigation;
+  ignore only browser-confirmed `ERR_ABORTED` or closed-page failures in that
+  transport, not missing assets or unexpected fetch errors.
+- **The outer runner owns all finite descendants.** Suite subprocesses run in a
+  dedicated process group. Before timeout/interruption signals, capture its
+  descendant process groups from PID/PPID/PGID only: Playwright starts Vite and
+  browsers in their own sessions, so killing the pnpm group alone still leaked
+  Vite in a deliberate timeout diagnostic. Terminate owned groups and escalate
+  resistant descendants after five seconds before returning and releasing the
+  disposable-stack lock. Never discover or kill processes by name. Playwright has a ten-second action
+  timeout and eight-minute global timeout inside the ten-minute outer cap: a
+  failing step can report and clean up instead of pnpm exiting while Playwright
+  and Vite keep running. Context cleanup in test `finally` blocks is best-effort
+  because timeout teardown may already have closed the browser; it must not mask
+  the original failing locator.

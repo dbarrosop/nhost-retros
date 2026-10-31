@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { type BrowserContext, expect, test } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
+import { expect, newContext, test } from "./fixtures";
 
 async function seed(context: BrowserContext, fixture: Actor) {
   const claims = JSON.parse(
@@ -34,11 +35,11 @@ test("two people keep multiple private cards; closure rejects a stale draft with
     bob = await actor(group),
     manager = await actor(group);
   const db = await connect(target);
-  const bobContext = await browser.newContext({
+  const bobContext = await newContext(browser, {
     baseURL: "http://localhost:5173",
     viewport: page.viewportSize(),
   });
-  const managerContext = await browser.newContext({
+  const managerContext = await newContext(browser, {
     baseURL: "http://localhost:5173",
     viewport: page.viewportSize(),
   });
@@ -67,6 +68,12 @@ test("two people keep multiple private cards; closure rejects a stale draft with
     }
     const other = await bobContext.newPage(),
       facilitator = await managerContext.newPage();
+    const startupFailures: string[] = [];
+    facilitator.on("pageerror", (error) => startupFailures.push(error.name));
+    facilitator.on("requestfailed", (request) => {
+      // Paths and browser failure codes only; no headers, tokens or response bodies.
+      startupFailures.push(`${new URL(request.url()).pathname}: ${request.failure()?.errorText}`);
+    });
     await page.goto(`/sessions/${sessionId}`);
     await other.goto(`/sessions/${sessionId}`);
     const observations = [
@@ -155,6 +162,13 @@ test("two people keep multiple private cards; closure rejects a stale draft with
       .getByLabel("New card for question 1", { exact: true })
       .fill("Keep this unsaved new thought");
     await facilitator.goto(`/facilitate/${sessionId}`);
+    try {
+      await expect(facilitator.getByRole("main")).toBeVisible();
+    } catch (error) {
+      throw new Error(`Facilitator bootstrap failed: ${startupFailures.join(", ")}`, {
+        cause: error,
+      });
+    }
     await facilitator.getByRole("button", { name: "End session", exact: true }).click();
     await facilitator
       .getByRole("dialog")
@@ -198,8 +212,7 @@ test("two people keep multiple private cards; closure rejects a stale draft with
       ].sort(),
     );
   } finally {
-    await bobContext.close();
-    await managerContext.close();
+    await Promise.allSettled([bobContext.close(), managerContext.close()]);
     await db.end();
     for (const fixture of [alice, bob, manager]) await cleanupActor(target, fixture.id);
   }

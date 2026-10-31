@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DraftProvider } from "../../lib/drafts";
 import { createQueryClient } from "../../lib/query-client";
 import { type Board, groupingFailed } from "./api";
 import { BoardWorkspace } from "./QuestionBoard";
@@ -48,6 +49,7 @@ function setup() {
   };
   let affected = 1;
   let readError = false;
+  let unavailable = false;
   let gate: Promise<void> | undefined;
   const requests: { query: string; variables: Record<string, string>; role: string }[] = [];
   vi.stubGlobal(
@@ -61,7 +63,9 @@ function setup() {
       if (!body.query.includes("mutation"))
         return readError
           ? Response.json({ errors: [{ message: "secret database detail" }] })
-          : Response.json({ data: { retroQuestions: [structuredClone(board)] } });
+          : Response.json({
+              data: { retroQuestions: unavailable ? [] : [structuredClone(board)] },
+            });
       await gate;
       const { name, id, topicId } = body.variables;
       const fields: Record<string, string> = {
@@ -100,7 +104,9 @@ function setup() {
   queries.setDefaultOptions({ queries: { retry: false } });
   render(
     <QueryClientProvider client={queries}>
-      <BoardWorkspace sessionId="session" questionId="question" />
+      <DraftProvider>
+        <BoardWorkspace sessionId="session" questionId="question" />
+      </DraftProvider>
     </QueryClientProvider>,
   );
   return {
@@ -116,6 +122,9 @@ function setup() {
     failRead: () => {
       readError = true;
     },
+    revoke: () => {
+      unavailable = true;
+    },
     hold: () => {
       let release = () => {};
       gate = new Promise<void>((resolve) => {
@@ -127,6 +136,39 @@ function setup() {
 }
 
 describe("facilitator reflection board", () => {
+  it("discards an abandoned rename when its toggle closes the editor", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    await screen.findByText("Alice");
+    const toggle = screen.getByRole("button", { name: "Rename topic Keep" });
+    await user.click(toggle);
+    const input = screen.getByLabelText("Rename topic Keep", { exact: true });
+    await user.clear(input);
+    await user.type(input, "Abandoned name");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Rename topic Keep", { exact: true })).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByLabelText("Rename topic Keep", { exact: true })).toHaveValue("Keep");
+    expect(app.requests.some((request) => request.query.includes("mutation"))).toBe(false);
+    app.queries.clear();
+  });
+  it("removes a held private snapshot immediately when a successful read loses access", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    await screen.findByText("Alice");
+    const release = app.hold();
+    await user.selectOptions(screen.getByRole("combobox"), "keep");
+    app.revoke();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("This board is unavailable");
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(screen.queryByText("Make room for focused work")).not.toBeInTheDocument();
+    await act(async () => release());
+    app.queries.clear();
+  });
   it("shows authors and explicitly assigns, moves and ungroups without any content write", async () => {
     const app = setup(),
       user = userEvent.setup();

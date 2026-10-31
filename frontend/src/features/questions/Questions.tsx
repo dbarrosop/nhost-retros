@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useDrafts } from "../../lib/drafts";
 import type { AppRole } from "../../lib/retro-api";
 import { Answers } from "../answers/Answers";
 import type { Question } from "../sessions/api";
@@ -20,7 +21,8 @@ export function Questions({
   readOnly?: boolean;
 }) {
   const change = useChange(role);
-  const [dirty, setDirty] = useState(false);
+  const drafts = useDrafts();
+  const [dirty, setDirty] = useState(() => Boolean(drafts?.get("New question")));
   const locked = ended || readOnly;
   return (
     <section className="questions-section" aria-labelledby="questions-title">
@@ -91,7 +93,9 @@ function QuestionItem({
   readOnly: boolean;
   role: AppRole;
 }) {
-  const [editing, setEditing] = useState(false);
+  const drafts = useDrafts();
+  const draftKey = `question:${question.id}`;
+  const [editing, setEditing] = useState(() => drafts?.has(draftKey) ?? false);
   const change = useChange(role);
   return (
     <li className="question-item">
@@ -102,6 +106,7 @@ function QuestionItem({
         <h3>{question.text}</h3>
         {editing && (
           <TextForm
+            draftKey={draftKey}
             label={`Edit question ${number}`}
             initial={question.text}
             multiline

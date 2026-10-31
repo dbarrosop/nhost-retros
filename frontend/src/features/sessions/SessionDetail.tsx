@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useDrafts } from "../../lib/drafts";
 import { type AppRole, readFailed } from "../../lib/retro-api";
 import { Questions } from "../questions/Questions";
 import { useSession } from "./api";
@@ -10,7 +11,8 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
   const query = useSession(role, id);
   const change = useChange(role);
   const navigate = useNavigate();
-  const [renaming, setRenaming] = useState(false);
+  const drafts = useDrafts();
+  const [renaming, setRenaming] = useState(() => drafts?.has("Rename session") ?? false);
   const session = query.data?.retroSessions[0];
   return (
     <>

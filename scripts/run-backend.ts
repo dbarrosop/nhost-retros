@@ -9,7 +9,7 @@ await main(async () =>
     await health(target);
     await applyMigrations(target);
     await synchronizeMetadata(target);
-    runSuite([
+    await runSuite([
       "--filter",
       "@retro/backend-tests",
       "exec",

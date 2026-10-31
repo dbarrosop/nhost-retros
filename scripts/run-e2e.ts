@@ -11,7 +11,7 @@ await main(async () =>
     await applyMigrations(target);
     await synchronizeMetadata(target);
     // Only public URLs go to Vite. Tokens stay in fixture process memory, not VITE_*.
-    runSuite(["--filter", "@retro/frontend", "exec", "playwright", "test"], {
+    await runSuite(["--filter", "@retro/frontend", "exec", "playwright", "test"], {
       ...process.env,
       VITE_NHOST_AUTH_URL: target.endpoints.auth,
       VITE_NHOST_GRAPHQL_URL: target.endpoints.graphql,

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { latestCode } from "../../backend/tests/lib/mail";
 import { connect, guard } from "../../backend/tests/lib/target";
+import { expect, test } from "./fixtures";
 
 test("verified OTP signup, wrong code, resend, restoration, signout and sign-in", async ({
   page,

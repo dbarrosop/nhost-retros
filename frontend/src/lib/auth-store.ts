@@ -49,6 +49,8 @@ export class AuthStore {
   private pending = new Set<AbortController>();
   private refreshTask: Promise<void> | undefined;
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  private expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  private dataController = new AbortController();
   private refreshBackoffMs = 1000;
   private running = false;
   private signingOut = false;
@@ -60,6 +62,7 @@ export class AuthStore {
     this.queries = queries;
   }
   getSnapshot = () => this.snapshot;
+  getDataSignal = () => this.dataController.signal;
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
     return () => {
@@ -71,7 +74,11 @@ export class AuthStore {
     const canQuery = eligible(session) && (session.decodedToken.exp ?? 0) > Date.now();
     const changed =
       identity(session) !== identity(this.snapshot.session) || canQuery !== this.snapshot.canQuery;
-    if (changed) clearPrivateQueries(this.queries);
+    if (changed) {
+      this.dataController.abort();
+      this.dataController = new AbortController();
+      clearPrivateQueries(this.queries);
+    }
     this.snapshot = {
       session: eligible(session) ? session : null,
       canQuery,
@@ -80,7 +87,28 @@ export class AuthStore {
       generation: this.snapshot.generation + (changed ? 1 : 0),
     };
     clearTimeout(this.refreshTimer);
-    if (this.running && session?.decodedToken.exp) {
+    clearTimeout(this.expiryTimer);
+    if (this.running && canQuery) {
+      // Refresh may still be in flight (or the browser offline) at expiry. Do not
+      // leave an expired JWT authorized until its transport timeout fires.
+      this.expiryTimer = setTimeout(
+        () => {
+          this.emit(
+            session,
+            true,
+            "Reconnecting your session. Private data is paused; we’ll retry automatically.",
+          );
+          void this.refresh();
+        },
+        (session.decodedToken.exp ?? Date.now()) - Date.now(),
+      );
+    }
+    if (
+      this.running &&
+      session?.decodedToken.exp &&
+      navigator.onLine &&
+      document.visibilityState === "visible"
+    ) {
       this.refreshTimer = setTimeout(
         () => void this.refresh(),
         refreshInMs ?? Math.max(10_000, session.decodedToken.exp - Date.now() - 60_000),
@@ -117,7 +145,11 @@ export class AuthStore {
   start() {
     this.running = true;
     const unsubscribe = this.client.sessionStorage.onChange((session) => {
-      if (!this.signingOut || !session) this.emit(session);
+      if (!this.signingOut || !session) {
+        if (!this.signingOut && identity(session) !== identity(this.snapshot.session))
+          this.cancel();
+        this.emit(session);
+      }
     });
     const sync = (event: StorageEvent) => {
       if (this.signingOut || (event.key !== "nhostSession" && event.key !== null)) return;
@@ -127,27 +159,41 @@ export class AuthStore {
       this.emit(this.client.getUserSession());
     };
     const focus = () => {
-      if (document.visibilityState === "visible") void this.refresh();
+      if (document.visibilityState === "visible" && navigator.onLine) void this.refresh();
+      else clearTimeout(this.refreshTimer);
     };
     window.addEventListener("storage", sync);
     window.addEventListener("focus", focus);
     window.addEventListener("online", focus);
+    window.addEventListener("offline", focus);
     document.addEventListener("visibilitychange", focus);
     void this.refresh();
     return () => {
       unsubscribe();
       this.running = false;
       clearTimeout(this.refreshTimer);
+      clearTimeout(this.expiryTimer);
       this.cancel();
+      this.dataController.abort();
+      this.dataController = new AbortController();
       window.removeEventListener("storage", sync);
       window.removeEventListener("focus", focus);
       window.removeEventListener("online", focus);
+      window.removeEventListener("offline", focus);
       document.removeEventListener("visibilitychange", focus);
     };
   }
   async refresh() {
     if (this.signingOut) return;
     if (this.refreshTask) return this.refreshTask;
+    if (!navigator.onLine || document.visibilityState !== "visible") {
+      this.emit(
+        this.client.getUserSession(),
+        true,
+        "Session checks are paused until this browser is online and visible.",
+      );
+      return;
+    }
     const epoch = this.epoch;
     // Keep persistence and failure handling inside the lock too: a waiting signout
     // must see (and revoke) the latest rotated token, not the pre-refresh token.

@@ -120,7 +120,10 @@ export function BoardWorkspace({
   const [focus, setFocus] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const board = held ?? query.data?.retroQuestions[0];
+  // A successful empty permission result takes precedence even during a drag.
+  // Holding geometry must never hold onto an unavailable private board.
+  const latest = query.data?.retroQuestions[0];
+  const board = query.isSuccess && !latest ? undefined : (held ?? latest);
   const busy = pending || query.isError || !api.enabled;
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),

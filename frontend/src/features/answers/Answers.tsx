@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useDrafts } from "../../lib/drafts";
 import { readFailed, useRetroQuery } from "../../lib/retro-api";
 import { ConfirmAction, TextForm, useChange } from "../sessions/controls";
 import {
@@ -25,7 +26,9 @@ export function Answers({
     questionId,
   });
   const change = useChange("user");
-  const [dirty, setDirty] = useState(false);
+  const drafts = useDrafts();
+  const draftKey = `new-answer:${questionId}`;
+  const [dirty, setDirty] = useState(() => Boolean(drafts?.get(draftKey)));
   const heading = useRef<HTMLHeadingElement>(null);
   const locked = ended || readOnly || query.isError || query.isPending;
   return (
@@ -60,6 +63,7 @@ export function Answers({
       {(!ended || dirty) && (
         <div className="answer-composer">
           <TextForm
+            draftKey={draftKey}
             label={`New card for question ${number}`}
             multiline
             maximum={4000}
@@ -97,7 +101,9 @@ function AnswerCard({
   locked: boolean;
   onDeleted: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const drafts = useDrafts();
+  const draftKey = `answer:${answer.id}`;
+  const [editing, setEditing] = useState(() => drafts?.has(draftKey) ?? false);
   const heading = useRef<HTMLHeadingElement>(null);
   const change = useChange("user");
   const label = `card ${number} for question ${questionNumber}`;
@@ -109,6 +115,7 @@ function AnswerCard({
       <p className="answer-text">{answer.text}</p>
       {editing && (
         <TextForm
+          draftKey={draftKey}
           label={`Edit ${label}`}
           initial={answer.text}
           multiline

@@ -7,8 +7,11 @@ export default defineConfig({
   retries: 0,
   reporter: "list",
   timeout: 30_000,
+  // Let a test timeout report and tear down before the outer process cap.
+  globalTimeout: 480_000,
   use: {
     baseURL: "http://localhost:5173",
+    actionTimeout: 10_000,
     // Auth material must never enter traces, videos or persisted storage states.
     trace: "off",
     video: "off",

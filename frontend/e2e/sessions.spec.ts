@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { type BrowserContext, expect, test } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 import { setFacilitator } from "../../backend/scripts/facilitator";
 import { type Actor, actor, cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { connect, guard } from "../../backend/tests/lib/target";
+import { expect, newContext, test } from "./fixtures";
 
 async function seed(context: BrowserContext, fixture: Actor) {
   // Process memory -> browser memory only. No JWT-bearing call logs/storageState files.
@@ -34,7 +35,7 @@ test("participants browse; trusted facilitators manage questions and permanently
   const manager = await actor(group);
   const participant = await actor(group);
   const db = await connect(target);
-  const readerContext = await browser.newContext({
+  const readerContext = await newContext(browser, {
     baseURL: "http://localhost:5173",
     viewport: page.viewportSize(),
   });
@@ -154,7 +155,8 @@ test("participants browse; trusted facilitators manage questions and permanently
     expect(group.budget.email).toBe(0);
     expect(group.budget.signin).toBe(2);
   } finally {
-    await readerContext.close();
+    // Timeout teardown may already have closed it; keep the original failed step.
+    await Promise.allSettled([readerContext.close()]);
     await db.end();
     await cleanupActor(target, participant.id);
     await cleanupActor(target, manager.id);

@@ -59,6 +59,125 @@ afterEach(() => {
 });
 
 describe("auth lifecycle", () => {
+  it("restores a seeded facilitator through StrictMode start/cleanup/start with a queued Web Lock", async () => {
+    sessionLocks();
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession("first", ["user", "me", "facilitator"]));
+    const refresh = vi
+      .spyOn(client.auth, "refreshToken")
+      .mockResolvedValue(reply(testSession("first", ["user", "me", "facilitator"])));
+    const firstStop = store.start();
+    firstStop();
+    const stop = store.start();
+    try {
+      await store.refresh();
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(store.getSnapshot().ready).toBe(true);
+      expect(store.getSnapshot().canQuery).toBe(true);
+      expect(store.getSnapshot().session?.user?.roles).toContain("facilitator");
+      expect(store.getDataSignal().aborted).toBe(false);
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it("keeps local signout authoritative and reports a failed server revocation", async () => {
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession());
+    vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(testSession()));
+    vi.spyOn(client.auth, "signOut").mockRejectedValue(new TypeError("Offline"));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      queries.setQueryData(["private"], "old account");
+      await store.signOut();
+      expect(store.getSnapshot().session).toBeNull();
+      expect(store.getSnapshot().notice).toContain("Server sign-out couldn’t be confirmed");
+      expect(queries.getQueryCache().getAll()).toHaveLength(0);
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it("pauses JWT access at expiry even while refresh is pending, and aborts private mutations", async () => {
+    vi.useFakeTimers();
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession());
+    const delayed = deferred<ReturnType<typeof reply>>();
+    vi.spyOn(client.auth, "refreshToken")
+      .mockResolvedValueOnce(reply(testSession()))
+      .mockReturnValue(delayed.promise);
+    const stop = store.start();
+    try {
+      await store.refresh();
+      const signal = store.getDataSignal();
+      queries.setQueryData(["private"], "expired account data");
+      const expires = client.getUserSession()?.decodedToken.exp ?? 0;
+      const refreshing = store.refresh();
+      await vi.advanceTimersByTimeAsync(expires - Date.now());
+      expect(store.getSnapshot().canQuery).toBe(false);
+      expect(signal.aborted).toBe(true);
+      expect(queries.getQueryCache().getAll()).toHaveLength(0);
+      delayed.resolve(reply(testSession()));
+      await refreshing;
+      expect(store.getSnapshot().canQuery).toBe(true);
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it("does not refresh repeatedly while hidden/offline and resumes on foreground reconnection", async () => {
+    vi.useFakeTimers();
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession());
+    const refresh = vi
+      .spyOn(client.auth, "refreshToken")
+      .mockImplementation(async () => reply(testSession()));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(900_000);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(store.getSnapshot().canQuery).toBe(false);
+      visibility.mockReturnValue("visible");
+      const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      online.mockReturnValue(true);
+      window.dispatchEvent(new Event("online"));
+      await store.refresh();
+      expect(refresh).toHaveBeenCalledTimes(2);
+      expect(store.getSnapshot().canQuery).toBe(true);
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it("cannot overwrite a same-tab account switch with an earlier refresh", async () => {
+    const { client, store, queries } = setup();
+    client.sessionStorage.set(testSession());
+    const refresh = vi
+      .spyOn(client.auth, "refreshToken")
+      .mockResolvedValueOnce(reply(testSession()));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      const delayed = deferred<ReturnType<typeof reply>>();
+      refresh.mockReturnValue(delayed.promise);
+      const refreshing = store.refresh();
+      client.sessionStorage.set(testSession("second"));
+      expect(refresh.mock.calls.at(-1)?.[1]?.signal?.aborted).toBe(true);
+      delayed.resolve(reply(testSession()));
+      await refreshing;
+      expect(store.getSnapshot().session?.user?.id).toBe("second");
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
   it("normalizes email and accepts only exact company addresses", () => {
     expect(normalizeEmail("  PERSON@NHOST.IO  ")).toBe("person@nhost.io");
     expect(companyEmail("  PERSON@NHOST.IO ")).toBe(true);

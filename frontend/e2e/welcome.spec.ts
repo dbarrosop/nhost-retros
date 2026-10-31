@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("welcome is readable, keyboard-accessible and fits the viewport", async ({ page }) => {
   await page.goto("/");

@@ -1,4 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useActivity } from "./activity";
 import { useAuth } from "./auth";
 import { graphqlUrl } from "./nhost";
 import { authQueryKey } from "./query-client";
@@ -13,6 +15,17 @@ export function useRetroApi(role: AppRole) {
   const { store, generation, session, canQuery } = useAuth();
   const client = useQueryClient();
   const key = authQueryKey(generation, session?.user?.id ?? "", role);
+  const lifetime = useMemo(
+    () => ({ generation, role, pending: new Set<AbortController>() }),
+    [generation, role],
+  );
+  useEffect(
+    () => () => {
+      for (const controller of lifetime.pending) controller.abort();
+      lifetime.pending.clear();
+    },
+    [lifetime],
+  );
   async function request<T>(
     query: string,
     variables: Record<string, unknown> = {},
@@ -26,23 +39,37 @@ export function useRetroApi(role: AppRole) {
       (role === "facilitator" && !before.session.user?.roles.includes(role))
     )
       throw new Error(readFailed);
-    const response = await fetch(graphqlUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${before.session.accessToken}`,
-        "x-hasura-role": role,
-      },
-      body: JSON.stringify({ query, variables }),
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(12_000)])
-        : AbortSignal.timeout(12_000),
-    });
-    const body = (await response.json()) as { data?: T; errors?: unknown[] };
-    if (store.getSnapshot().generation !== generation || signal?.aborted)
-      throw new DOMException("Account changed", "AbortError");
-    if (!response.ok || body.errors?.length || !body.data) throw new Error(readFailed);
-    return body.data;
+    const controller = new AbortController();
+    lifetime.pending.add(controller);
+    try {
+      const response = await fetch(graphqlUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${before.session.accessToken}`,
+          "x-hasura-role": role,
+        },
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.any([
+          controller.signal,
+          ...(store.getDataSignal ? [store.getDataSignal()] : []),
+          ...(signal ? [signal] : []),
+          AbortSignal.timeout(12_000),
+        ]),
+      });
+      const body = (await response.json()) as { data?: T; errors?: unknown[] };
+      if (
+        store.getSnapshot().generation !== generation ||
+        !store.getSnapshot().canQuery ||
+        controller.signal.aborted ||
+        signal?.aborted
+      )
+        throw new DOMException("Account changed", "AbortError");
+      if (!response.ok || body.errors?.length || !body.data) throw new Error(readFailed);
+      return body.data;
+    } finally {
+      lifetime.pending.delete(controller);
+    }
   }
   return {
     request,
@@ -52,7 +79,8 @@ export function useRetroApi(role: AppRole) {
   };
 }
 
-// Only mounted foreground routes poll; Query's online/focus managers pause hidden/offline work.
+// Mounted, visible, online routes only. Disable AND cancel reads on transitions;
+// enabling again refetches immediately, including browsers without a focus event.
 export function useRetroQuery<T>(
   role: AppRole,
   suffix: readonly string[],
@@ -60,12 +88,19 @@ export function useRetroQuery<T>(
   variables = {},
 ) {
   const api = useRetroApi(role);
+  const activity = useActivity();
+  const client = useQueryClient();
+  const queryKey = [...api.key, ...suffix];
+  const keyId = JSON.stringify(queryKey);
+  useEffect(() => {
+    if (activity !== "active")
+      void client.cancelQueries({ queryKey: JSON.parse(keyId), exact: true });
+  }, [activity, client, keyId]);
   return useQuery({
-    queryKey: [...api.key, ...suffix],
+    queryKey,
     queryFn: ({ signal }) => api.request<T>(query, variables, signal),
-    enabled: api.enabled,
-    refetchInterval: () =>
-      document.visibilityState === "visible" && navigator.onLine ? 2000 : false,
+    enabled: api.enabled && activity === "active",
+    refetchInterval: 2000,
     refetchIntervalInBackground: false,
   });
 }

@@ -417,13 +417,6 @@ h3 {
   display: flex;
   gap: 1.5rem;
 }
-button {
-  cursor: pointer;
-}
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
 .auth-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1069,4 +1062,16 @@ dialog .dialog-description {
   .topic-column {
     transition: none;
   }
+}
+.connection-status {
+  margin-block: 1.5rem 0;
+  border-left: 2px solid var(--border);
+  padding: 0.5rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.connection-status.offline {
+  border-color: #d6af88;
+  color: #edd0b1;
 }

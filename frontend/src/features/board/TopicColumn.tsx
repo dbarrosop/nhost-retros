@@ -1,5 +1,6 @@
 import { useDroppable } from "@dnd-kit/core";
 import { type ReactNode, useLayoutEffect, useState } from "react";
+import { useDrafts } from "../../lib/drafts";
 import { ConfirmAction, TextForm } from "../sessions/controls";
 import { groupingFailed, type Topic, ungrouped } from "./api";
 
@@ -21,7 +22,9 @@ export function TopicColumn({
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
-  const [editing, setEditing] = useState(false);
+  const drafts = useDrafts();
+  const draftKey = `topic:${id}`;
+  const [editing, setEditing] = useState(() => drafts?.has(draftKey) ?? false);
   const [restoreFocus, setRestoreFocus] = useState(false);
   useLayoutEffect(() => {
     if (restoreFocus && !editing && !busy) {
@@ -54,7 +57,10 @@ export function TopicColumn({
               className="text-button"
               type="button"
               disabled={busy}
-              onClick={() => setEditing(!editing)}
+              onClick={() => {
+                if (editing) drafts?.delete(draftKey);
+                setEditing(!editing);
+              }}
               aria-expanded={editing}
             >
               Rename <span className="sr-only">topic {name}</span>
@@ -74,6 +80,7 @@ export function TopicColumn({
         )}
         {editing && topic && (
           <TextForm
+            draftKey={draftKey}
             label={`Rename topic ${name}`}
             maximum={120}
             initial={name}

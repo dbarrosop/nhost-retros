@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
+import { useDrafts } from "../../lib/drafts";
 import { type AppRole, changeFailed, requireAffected, useRetroApi } from "../../lib/retro-api";
 import { plainText } from "../../lib/text";
 
@@ -37,6 +38,7 @@ export function TextForm({
   onDirty,
   failureMessage = changeFailed,
   blocked = false,
+  draftKey = label,
 }: {
   label: string;
   maximum: number;
@@ -49,9 +51,11 @@ export function TextForm({
   onDirty?: (dirty: boolean) => void;
   failureMessage?: string;
   blocked?: boolean;
+  draftKey?: string;
 }) {
   const id = useId();
-  const [value, setValue] = useState(initial);
+  const drafts = useDrafts();
+  const [value, setValue] = useState(() => drafts?.get(draftKey) ?? initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const input = {
@@ -61,6 +65,7 @@ export function TextForm({
     readOnly: pending || blocked,
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setValue(event.target.value);
+      drafts?.set(draftKey, event.target.value);
       onDirty?.(Boolean(event.target.value));
     },
     "aria-describedby": `${id}-hint`,
@@ -84,6 +89,7 @@ export function TextForm({
         setPending(true);
         try {
           await onSave(text);
+          drafts?.delete(draftKey);
           setValue("");
         } catch {
           setError(failureMessage);
@@ -115,7 +121,15 @@ export function TextForm({
           {pending ? "Saving…" : submit}
         </button>
         {onCancel && (
-          <button className="secondary-button" type="button" disabled={pending} onClick={onCancel}>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              drafts?.delete(draftKey);
+              onCancel();
+            }}
+          >
             Cancel
           </button>
         )}

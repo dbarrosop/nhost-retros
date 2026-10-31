@@ -1,5 +1,6 @@
 import { createNhostClient } from "@nhost/nhost-js";
 import { MemoryStorage } from "@nhost/nhost-js/session";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -11,12 +12,15 @@ import { createAppRouter } from "../../router";
 
 function setup(path = "/auth") {
   const client = createNhostClient({ storage: new MemoryStorage() });
-  const store = new AuthStore(client, createQueryClient());
+  const queries = createQueryClient();
+  const store = new AuthStore(client, queries);
   const router = createAppRouter(createMemoryHistory({ initialEntries: [path] }));
   render(
-    <AuthProvider store={store}>
-      <RouterProvider router={router} />
-    </AuthProvider>,
+    <QueryClientProvider client={queries}>
+      <AuthProvider store={store}>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </QueryClientProvider>,
   );
   return { store, client };
 }
