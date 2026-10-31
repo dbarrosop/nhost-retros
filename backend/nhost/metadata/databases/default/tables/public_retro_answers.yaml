@@ -19,6 +19,19 @@ configuration:
     delete: deleteRetroAnswers
     delete_by_pk: deleteRetroAnswer
 object_relationships:
+  - name: author
+    using:
+      manual_configuration:
+        remote_table: {name: retro_answer_authors, schema: public}
+        column_mapping:
+          author_id: id
+  - name: assignment
+    using:
+      manual_configuration:
+        remote_table: {name: retro_answer_topics, schema: public}
+        column_mapping:
+          id: answer_id
+          question_id: question_id
   - name: question
     using:
       foreign_key_constraint_on: question_id

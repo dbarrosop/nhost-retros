@@ -21,6 +21,11 @@ object_relationships:
     using:
       foreign_key_constraint_on: session_id
 array_relationships:
+  - name: topics
+    using:
+      foreign_key_constraint_on:
+        column: question_id
+        table: {name: retro_topics, schema: public}
   - name: answers
     using:
       foreign_key_constraint_on:

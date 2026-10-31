@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { cleanupActor, newGroup } from "../../backend/tests/lib/auth";
 import { latestCode } from "../../backend/tests/lib/mail";
 import { connect, guard } from "../../backend/tests/lib/target";
@@ -13,9 +13,28 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
   const group = await newGroup(target);
   const email = `browser-${randomUUID()}@nhost.io`;
   const statuses: number[] = [];
-  await context.route(`${target.endpoints.auth}/**`, (route) => {
+  // Navigation/load and a hidden connection notice do not mean that the lock-gated
+  // refresh has finished. Observe its response without reading/logging credentials.
+  const nextRotation = (tab: Page) =>
+    tab.waitForResponse(
+      (response) =>
+        response.url() === `${target.endpoints.auth}/token` &&
+        response.request().method() === "POST",
+    );
+  let pendingRotation: { page: Page; started: () => void; gate: Promise<void> } | undefined;
+  await context.route(`${target.endpoints.auth}/**`, async (route) => {
     if (route.request().method() === "POST")
       group.budget.spend(new URL(route.request().url()).pathname.replace(/^\/v1/, ""));
+    const pending = pendingRotation;
+    if (
+      pending &&
+      route.request().url() === `${target.endpoints.auth}/token` &&
+      route.request().frame().page() === pending.page
+    ) {
+      pendingRotation = undefined;
+      pending.started();
+      await pending.gate;
+    }
     return route.continue();
   });
   context.on("response", (response) => {
@@ -29,6 +48,8 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
       element.dispatchEvent(new Event("input", { bubbles: true }));
     }, code);
   };
+  // Clock installation is context-wide: do it before any application timers exist.
+  await page.clock.install();
   try {
     await page.goto("/workspace");
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -41,11 +62,12 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     await fillCode(initialCode === "000000" ? "000001" : "000000");
     await page.getByRole("button", { name: "Verify and continue" }).click();
     await expect(page.getByRole("alert")).toContainText("invalid, expired or already used");
-    // Browser-only clock advance exercises the resend cooldown without waiting or changing Auth clocks.
-    await page.clock.install();
+    // Advance only the resend interval, then remove the wall-clock skew before
+    // JWT expiry arithmetic, reload and second-tab restoration. Auth clocks never change.
     await page.clock.fastForward(31_000);
     await page.getByRole("button", { name: "Resend code", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("A new code is on its way");
+    await page.clock.setSystemTime(Date.now());
     await fillCode(await latestCode(target, email));
     await page.getByRole("button", { name: "Verify and continue" }).click();
     await expect(page.getByRole("heading", { name: "Welcome to the team space." })).toBeVisible();
@@ -61,11 +83,37 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     await expect(page.getByRole("status", { name: "Session connection" })).toContainText(
       "retry automatically",
     );
+    const reconnected = nextRotation(page);
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    const connection = await reconnected;
+    expect(connection.status()).toBe(200);
+    await connection.finished();
     await expect(page.getByRole("status", { name: "Session connection" })).not.toBeVisible();
     const other = await context.newPage();
-    await other.goto("/workspace");
-    await expect(other.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+    let releaseRotation!: () => void;
+    const rotationGate = new Promise<void>((resolve) => {
+      releaseRotation = resolve;
+    });
+    let rotationStarted!: () => void;
+    const rotating = new Promise<void>((resolve) => {
+      rotationStarted = resolve;
+    });
+    // Deterministically exercise navigation finishing before restoration: keep the
+    // real token request pending until the loading shell has been checked.
+    pendingRotation = { page: other, started: rotationStarted, gate: rotationGate };
+    const restored = nextRotation(other);
+    try {
+      await other.goto("/workspace");
+      await rotating;
+      await expect(other.getByText("Checking your session…", { exact: true })).toBeVisible();
+      releaseRotation();
+      const restoration = await restored;
+      expect(restoration.status()).toBe(200);
+      await restoration.finished();
+      await expect(other.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+    } finally {
+      releaseRotation();
+    }
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await expect(other.getByRole("heading", { name: "Welcome back" })).toBeVisible();

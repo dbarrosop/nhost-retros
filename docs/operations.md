@@ -31,6 +31,16 @@ Integration commands are separate and mandatory in CI. Missing targets, services
 browsers or port 5173 cause failure. Playwright owns a finite Vite subprocess,
 never attaches to an existing dev server, and shuts Vite down after the suite.
 Stop `pnpm dev` before E2E. CI uses `nix develop` for identical CLI/browser pins.
+If `nix flake check` reports `running 0 flake checks`, also build the named gates
+to verify the derivations, not just successful evaluation. For an aarch64 Linux
+host (substitute your host system on other architectures):
+
+```sh
+nix build --no-link \
+  .#checks.aarch64-linux.nixpkgs-fmt \
+  .#checks.aarch64-linux.biome-version \
+  .#checks.aarch64-linux.playwright-version
+```
 
 ## Isolation and destructive-operation boundary
 
@@ -263,7 +273,8 @@ closed session cannot be renamed, reopened or deleted, and its questions cannot
 be added/edited/deleted. Answer cards also become immutable. Database triggers lock
 before inspecting closure, so concurrent/stale API writes cannot bypass this rule.
 Empty-only deletion and restrictive foreign keys prevent accidental cascades.
-Topics/boards are not yet implemented.
+The facilitator-only grouping API is available before and after ending;
+the board UI is not yet implemented.
 
 The UI counts Unicode code points, not JavaScript UTF-16 length. SQL applies the
 same explicit whitespace trimming set: names allow 1–120 code points, questions
@@ -284,7 +295,34 @@ participant flows, including multiple private cards, cross-tab closure and draft
 retention. Participant card reads omit author IDs; facilitators may read all cards
 and author IDs but cannot edit/delete others’ content. For their own participation,
 facilitators follow the session’s participant link, which sends the ordinary user
-role. Author names/emails and grouping are not yet exposed.
+role. The facilitator API additionally exposes only retained-answer authors'
+IDs, display names and emails; participants cannot select or filter by this
+projection or grouping relationships.
+
+### Facilitator grouping API
+
+`retroTopics` supports insert (`questionId`, `name`), rename (`name` only) and
+delete. Topic names use the same trimming/code-point rules as session names
+(1–120). `retroAnswerTopics` supports insert (`answerId`, `questionId`, `topicId`),
+move (`topicId` only), and delete (Ungrouped). An answer has at most one assignment;
+composite foreign keys reject cross-question/session targets. Topic/assignment
+identities and parents cannot change. All operations require the explicit
+`facilitator` role plus live eligibility/membership, even with a previously issued
+JWT. `user`/`me` have no grouping/author schema or aggregates.
+
+Grouping does not update answer text, authorship or timestamps and remains writable
+after closure. Topic deletion removes only assignments; cards become Ungrouped.
+An active answer deletion cleans its assignment; an empty active question deletion
+cleans its topics. Retained answers still prevent question/account deletion.
+
+Use explicit assignment insert/update/delete rather than relying on upsert.
+Duplicate insert and deleted-destination insert/move fail; missing-row update/delete
+returns zero affected rows. A committed destination deletion after a move cleans
+that assignment. Concurrent moves serialize, with the last successful write winning.
+Refetch the board on errors/zero rows; do not automatically replay moves or parse
+Hasura/Constellation error strings. Crafted `on_conflict` is tested on both engines:
+only `topicId` is updateable, and the same composite integrity constraints apply.
+The browser board and its move feedback are the next slice, not a current UI.
 
 Answer-to-question and answer-to-author foreign keys are intentionally restrictive.
 Deleting an account with retained cards fails, even for a trusted SQL operator;
@@ -293,6 +331,18 @@ explicit, backed-up operator procedure, not trigger disabling in routine cleanup
 
 ### Browser harness pitfalls
 
+- Navigation completion is not session readiness: restoration waits for
+  `nhostSessionLock` and a real `/token` response. In OTP tests, register the
+  response waiter before reconnect/navigation, assert success/completion without
+  reading credentials, then assert the signed-in UI. A promise-gated response
+  covers the pending shell deterministically; do not mask the boundary with
+  sleeps, retries or larger UI timeouts. Install Playwright's context-wide clock
+  before application timers exist, and realign its resend-only wall-clock advance
+  before verifying tokens or opening another tab. Put temporary token gates in
+  the context-wide budget handler so each real request is counted and handled
+  exactly once. In pinned Playwright 1.61.1, layering a page-specific one-shot
+  gate with `route.fallback()` over that handler produced `Route is already
+  handled` failures; use one route owner, not overlapping response handlers.
 - Chromium’s local host-resolver mapping does not apply to Playwright `route.fetch`
   (Node APIRequestContext). Use `route.continue` for real browser traffic and passive
   response capture when replaying a stale read. APIRequestContext failures can print

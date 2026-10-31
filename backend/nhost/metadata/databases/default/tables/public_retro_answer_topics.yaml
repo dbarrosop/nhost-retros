@@ -1,0 +1,52 @@
+table:
+  name: retro_answer_topics
+  schema: public
+configuration:
+  custom_name: retroAnswerTopics
+  custom_column_names:
+    answer_id: answerId
+    question_id: questionId
+    topic_id: topicId
+  custom_root_fields:
+    select: retroAnswerTopics
+    select_by_pk: retroAnswerTopic
+    select_aggregate: retroAnswerTopicsAggregate
+    insert: insertRetroAnswerTopics
+    insert_one: insertRetroAnswerTopic
+    update: updateRetroAnswerTopics
+    update_by_pk: updateRetroAnswerTopic
+    delete: deleteRetroAnswerTopics
+    delete_by_pk: deleteRetroAnswerTopic
+object_relationships:
+  - name: answer
+    using:
+      foreign_key_constraint_on: [answer_id, question_id]
+  - name: topic
+    using:
+      foreign_key_constraint_on: [topic_id, question_id]
+select_permissions:
+  - role: facilitator
+    permission:
+      columns: [answer_id, question_id, topic_id]
+      allow_aggregations: false
+      filter: &facilitator
+        _exists:
+          _table: {name: retro_eligible_users, schema: public}
+          _where:
+            id: {_eq: X-Hasura-User-Id}
+            is_facilitator: {_eq: true}
+insert_permissions:
+  - role: facilitator
+    permission:
+      columns: [answer_id, question_id, topic_id]
+      check: *facilitator
+update_permissions:
+  - role: facilitator
+    permission:
+      columns: [topic_id]
+      filter: *facilitator
+      check: *facilitator
+delete_permissions:
+  - role: facilitator
+    permission:
+      filter: *facilitator

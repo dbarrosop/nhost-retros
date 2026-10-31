@@ -18,3 +18,6 @@
 - "!include public_retro_sessions.yaml"
 - "!include public_retro_questions.yaml"
 - "!include public_retro_answers.yaml"
+- "!include public_retro_topics.yaml"
+- "!include public_retro_answer_topics.yaml"
+- "!include public_retro_answer_authors.yaml"

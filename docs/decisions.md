@@ -188,3 +188,46 @@
   Role-specific documents live in dependency-light modules so real-JWT tests
   execute the same queries and inspect actual role input/output schemas, without
   introducing codegen or a second client/cache layer.
+
+## Phase 6 — Independent, private grouping API
+
+- **Grouping never writes answer rows.** Topics and one optional assignment per
+  answer are separate tables; composite foreign keys bind both ends to the same
+  question. Only `topic_id` changes on a move. Topic identity/parent/creation time
+  and assignment answer/question are immutable even in direct SQL. There is no
+  closure predicate on grouping: closed-session content remains frozen while
+  topic CRUD, group/move/ungroup and topic-deletion cascades remain available.
+  Deleting a topic removes assignments only; deleting an active answer removes
+  its assignment, not its topic. Empty active questions may cascade their topics.
+- **Global facilitation, no participant schema or directory.** Every grouping and
+  author permission checks live eligibility and trusted membership. Participants
+  (including a facilitator using `user`) have no grouping/author types,
+  relationships, filters or aggregates. A read-only view projects only ID,
+  display name and email for accounts with retained answers, including former
+  participants; no general Auth directory is exposed. Explicit relationships
+  support a per-question board without extending participant projections.
+- **Explicit writes and server-authoritative conflicts.** The API supports
+  assignment insert, topic-only update and delete. A duplicate insert fails;
+  supported crafted upserts can only change `topicId` within the existing
+  answer's question. Concurrent moves serialize on the assignment row (last
+  successful write wins). If a destination was deleted, insert/move fails by
+  foreign key; a missing assignment/topic update/delete returns zero affected
+  rows. Deleting a destination after a successful move cascades its assignment,
+  returning the card to Ungrouped. Callers must refetch after failure or zero
+  rows rather than parse engine errors, retry stale intent or assume success.
+  Both engines' real-JWT tests cover these contracts, including controlled
+  blocking/rollback races and unchanged answer text, author and timestamps.
+  The board UI remains Phase 7; no unfinished controls are advertised now.
+- **Acceptance repair outside the API slice.** The pre-existing OTP journey started
+  its five-second second-tab UI assertion at navigation completion, although
+  readiness waits for the cross-tab session lock and a separate token rotation
+  (whose request bound is fifteen seconds). It now waits for successful, completed
+  token responses before asserting the same signed-in UI. A
+  promise-gated real rotation also checks the pending loading shell, so this
+  asynchronous boundary is exercised deterministically, without sleeps, polling,
+  retries or relaxed assertions/timeouts. The context-wide fake clock is installed
+  before application timers and its resend-only wall-clock advance is realigned
+  before verification/restoration. No runtime Auth behavior changed. The historical
+  intermittent failure did not reproduce in six diagnostic mobile runs; these
+  changes remove the identified unsynchronized readiness/timer hazards rather
+  than claiming a measured server or Web-Lock delay from that prior failure.

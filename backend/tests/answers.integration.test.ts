@@ -84,7 +84,17 @@ describe("private multiple cards and actual role-schema contracts", () => {
           expect(fields("retroAnswers")).toEqual(
             (role === "user"
               ? ["id", "questionId", "text", "createdAt", "updatedAt", "question"]
-              : ["id", "questionId", "authorId", "text", "createdAt", "updatedAt", "question"]
+              : [
+                  "id",
+                  "questionId",
+                  "authorId",
+                  "text",
+                  "createdAt",
+                  "updatedAt",
+                  "question",
+                  "author",
+                  "assignment",
+                ]
             ).sort(),
           );
           expect(schema.queryType.fields.map((f) => f.name)).not.toContain("retroAnswersAggregate");
@@ -98,7 +108,7 @@ describe("private multiple cards and actual role-schema contracts", () => {
             expect(
               schema.mutationType.fields
                 .map((f) => f.name)
-                .filter((n) => /(?:insert|update|delete)RetroAnswer/.test(n)),
+                .filter((n) => /^(?:insert|update|delete)RetroAnswers?$/.test(n)),
             ).toEqual([]);
           }
         }
