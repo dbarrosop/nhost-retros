@@ -184,3 +184,20 @@ passed. A fresh registered disposable stack passed all six migration up/down/up
 checks and 19 integration tests, including arbitrary-domain/implicit OTP signup,
 role-escalation rejection, verified `@acme.local` OTP sessions and both GraphQL
 engines. The developer database was not reset or used for these checks.
+
+## Local demo seed regression
+
+The native Nhost SQL seed passed three disposable integration cases: coherent
+verified users/roles and boards, unchanged replay plus preservation of edits and
+revoked grants, and atomic rollback on an account-ID/email collision. It creates
+9 accounts, 3 retrospectives, 9 questions, 72 responses, 19 topics and 54 group
+assignments. Tests roll all seed data back; the developer database was untouched.
+
+The follow-up dual-engine browser command was blocked before browser startup by
+an existing server on port 5173. That server was left running; no new Playwright
+pass is claimed for these changes.
+
+Final combined validation also passed lint, TypeScript checks, all 160 unit tests,
+the production build and all 22 backend integration tests (including the three
+seed cases). The six-migration scratch up/down/up check passed earlier in this
+change. Browser acceptance remains blocked solely by the occupied frontend port.

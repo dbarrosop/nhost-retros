@@ -170,7 +170,13 @@ existing account, and delegates eligibility/locking/default-user preservation to
 the same tested operator transaction. It never creates users or grants roles via
 Auth signup/browser metadata. Refresh/sign in again (or focus the SPA) after a
 grant; use **Facilitator workspace**. Revocation affects old JWTs immediately at
-the data layer. No operator account or role grant is pre-created by setup.
+the data layer. The additive helper does not create accounts or grants. First
+local Nhost startup also applies the checked-in demo seed; on an existing stack,
+add `--apply-seeds` to the usual startup command without changing its project,
+subdomain or port flags. The seed provisions `factilitator@acme.local` as a trusted
+facilitator plus fictional participants and example retrospectives. It is for
+local development only; see [the seed instructions](../README.md#local-demo-seed).
+Never apply demo users/grants to production.
 
 ## Isolation and destructive-operation boundary
 

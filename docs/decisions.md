@@ -511,3 +511,20 @@
   domain; eligibility, welcome copy and access messages no longer imply an
   `@nhost.io` requirement. Disposable fixtures and browser OTP acceptance use
   `@acme.local` to exercise the unrestricted policy end to end.
+
+## Local demonstration seed
+
+- **Use the native Nhost seed directory, not a data migration.** The seed creates
+  only fictional local data: one explicitly granted facilitator, eight ordinary
+  participants, active/ended retrospectives and question boards with both grouped
+  and ungrouped responses. Auth users have the ordinary `user` default and no
+  password; local OTP/Mailhog remains the login path. The requested address is
+  intentionally `factilitator@acme.local`. Global signup roles remain `user,me`.
+- **Preserve edits and closure on replay.** Stable IDs and insert-only existence
+  checks make the seed repeatable without bypassing closure triggers. Accounts
+  receive memberships only when newly created; rerunning cannot restore a revoked
+  facilitator grant. The entire seed is atomic and refuses ID/email collisions.
+  Ended-session cards remain frozen while their grouping is still mutable.
+- **Validate without touching developer data.** Seed tests use rolled-back
+  transactions on the registered disposable database to check counts, eligibility,
+  relationships, replay preservation, frozen content and collision rollback.

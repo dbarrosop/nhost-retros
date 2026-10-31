@@ -72,6 +72,32 @@ The helper never creates users or grants an ineligible account. See [developer s
 for backups, safe retries and limitations. No persistent frontend server is
 started by setup.
 
+### Local demo seed
+
+`backend/nhost/seeds/default/20261106000000_demo_retros.sql` creates:
+
+- `factilitator@acme.local` with trusted facilitator membership (spelling intentional).
+- Eight fictional participants: `avery`, `jordan`, `samira`, `diego`, `mei`, `noah`,
+  `imani` and `luca`, all at `@acme.local`.
+- Three retrospectives (two active, one ended), nine questions, 72 responses,
+  19 topics and 54 assignments; 18 cards remain ungrouped.
+
+Nhost applies seeds on the first local startup. For an existing stack, add
+`--apply-seeds` to your usual `nhost up` command, retaining its existing
+root/project/subdomain/port flags. This applies pending migrations first; do not
+reset volumes. Use this seed only for local development, never production.
+
+Sign in with a seeded email and retrieve its OTP from your local Mailhog. No
+shared password is configured. The facilitator can switch to **Facilitator
+workspace**; every account retains the ordinary `user` default, and signup still
+cannot request facilitator privileges.
+
+The seed is atomic and repeatable. Existing cards, names, account state and group
+moves are not overwritten, and revoked facilitator membership is not restored.
+An account-ID/email collision aborts the seed rather than granting a role to the
+wrong person. Tests run it inside rolled-back disposable transactions; they do
+not populate or reset the developer database.
+
 ### Public configuration
 
 `frontend/.env.example` documents `VITE_NHOST_SUBDOMAIN` and `VITE_NHOST_REGION`.
