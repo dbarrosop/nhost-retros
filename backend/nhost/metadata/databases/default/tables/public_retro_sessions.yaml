@@ -2,19 +2,22 @@ table:
   name: retro_sessions
   schema: public
 configuration:
-  custom_name: retroSessions
+  column_config:
+    created_at:
+      custom_name: createdAt
   custom_column_names:
     created_at: createdAt
+  custom_name: retroSessions
   custom_root_fields:
-    select: retroSessions
-    select_by_pk: retroSession
-    select_aggregate: retroSessionsAggregate
-    insert: insertRetroSessions
-    insert_one: insertRetroSession
-    update: updateRetroSessions
-    update_by_pk: updateRetroSession
     delete: deleteRetroSessions
     delete_by_pk: deleteRetroSession
+    insert: insertRetroSessions
+    insert_one: insertRetroSession
+    select: retroSessions
+    select_aggregate: retroSessionsAggregate
+    select_by_pk: retroSession
+    update: updateRetroSessions
+    update_by_pk: updateRetroSession
 array_relationships:
   - name: questions
     using:
@@ -23,51 +26,103 @@ array_relationships:
         table:
           name: retro_questions
           schema: public
-select_permissions:
-  - role: user
-    permission:
-      columns: [id, name, ended, created_at]
-      allow_aggregations: false
-      filter:
-        _exists:
-          _table: {name: retro_eligible_users, schema: public}
-          _where:
-            id: {_eq: X-Hasura-User-Id}
-  - role: facilitator
-    permission:
-      columns: [id, name, ended, created_at]
-      allow_aggregations: false
-      filter: &facilitator
-        _exists:
-          _table: {name: retro_eligible_users, schema: public}
-          _where:
-            id: {_eq: X-Hasura-User-Id}
-            is_facilitator: {_eq: true}
 insert_permissions:
   - role: facilitator
     permission:
-      columns: [name]
-      set:
-        ended: false
       check:
         _and:
-          - *facilitator
-          - ended: {_eq: false}
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+                is_facilitator:
+                  _eq: true
+          - ended:
+              _eq: false
+      set:
+        ended: false
+      columns:
+        - name
+select_permissions:
+  - role: facilitator
+    permission:
+      columns:
+        - id
+        - name
+        - ended
+        - created_at
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - name
+        - ended
+        - created_at
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
 update_permissions:
   - role: facilitator
     permission:
-      columns: [name, ended]
+      columns:
+        - name
+        - ended
       filter:
         _and:
-          - *facilitator
-          - ended: {_eq: false}
-      check: *facilitator
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+                is_facilitator:
+                  _eq: true
+          - ended:
+              _eq: false
+      check:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
 delete_permissions:
   - role: facilitator
     permission:
       filter:
         _and:
-          - *facilitator
-          - ended: {_eq: false}
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+                is_facilitator:
+                  _eq: true
+          - ended:
+              _eq: false
           - _not:
               questions: {}

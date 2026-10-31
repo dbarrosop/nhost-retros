@@ -2,9 +2,12 @@ table:
   name: retro_answer_authors
   schema: public
 configuration:
-  custom_name: retroAnswerAuthors
+  column_config:
+    display_name:
+      custom_name: displayName
   custom_column_names:
     display_name: displayName
+  custom_name: retroAnswerAuthors
   custom_root_fields:
     select: retroAnswerAuthors
     select_aggregate: retroAnswerAuthorsAggregate
@@ -12,17 +15,26 @@ array_relationships:
   - name: answers
     using:
       manual_configuration:
-        remote_table: {name: retro_answers, schema: public}
         column_mapping:
           id: author_id
+        insertion_order: null
+        remote_table:
+          name: retro_answers
+          schema: public
 select_permissions:
   - role: facilitator
     permission:
-      columns: [id, display_name, email]
-      allow_aggregations: false
+      columns:
+        - id
+        - display_name
+        - email
       filter:
         _exists:
-          _table: {name: retro_eligible_users, schema: public}
+          _table:
+            name: retro_eligible_users
+            schema: public
           _where:
-            id: {_eq: X-Hasura-User-Id}
-            is_facilitator: {_eq: true}
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true

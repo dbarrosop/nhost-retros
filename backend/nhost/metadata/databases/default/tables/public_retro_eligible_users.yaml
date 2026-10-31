@@ -1,4 +1,3 @@
 table:
   name: retro_eligible_users
   schema: public
-# Tracked only for _exists predicates; no role can select this view.

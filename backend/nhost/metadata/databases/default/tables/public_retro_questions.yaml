@@ -2,75 +2,147 @@ table:
   name: retro_questions
   schema: public
 configuration:
-  custom_name: retroQuestions
+  column_config:
+    created_at:
+      custom_name: createdAt
+    session_id:
+      custom_name: sessionId
   custom_column_names:
-    session_id: sessionId
     created_at: createdAt
+    session_id: sessionId
+  custom_name: retroQuestions
   custom_root_fields:
-    select: retroQuestions
-    select_by_pk: retroQuestion
-    select_aggregate: retroQuestionsAggregate
-    insert: insertRetroQuestions
-    insert_one: insertRetroQuestion
-    update: updateRetroQuestions
-    update_by_pk: updateRetroQuestion
     delete: deleteRetroQuestions
     delete_by_pk: deleteRetroQuestion
+    insert: insertRetroQuestions
+    insert_one: insertRetroQuestion
+    select: retroQuestions
+    select_aggregate: retroQuestionsAggregate
+    select_by_pk: retroQuestion
+    update: updateRetroQuestions
+    update_by_pk: updateRetroQuestion
 object_relationships:
   - name: session
     using:
       foreign_key_constraint_on: session_id
 array_relationships:
-  - name: topics
-    using:
-      foreign_key_constraint_on:
-        column: question_id
-        table: {name: retro_topics, schema: public}
   - name: answers
     using:
       foreign_key_constraint_on:
         column: question_id
-        table: {name: retro_answers, schema: public}
-select_permissions:
-  - role: user
-    permission:
-      columns: [id, session_id, text, created_at]
-      allow_aggregations: false
-      filter:
-        _exists:
-          _table: {name: retro_eligible_users, schema: public}
-          _where:
-            id: {_eq: X-Hasura-User-Id}
-  - role: facilitator
-    permission:
-      columns: [id, session_id, text, created_at]
-      allow_aggregations: false
-      filter: &facilitator
-        _exists:
-          _table: {name: retro_eligible_users, schema: public}
-          _where:
-            id: {_eq: X-Hasura-User-Id}
-            is_facilitator: {_eq: true}
+        table:
+          name: retro_answers
+          schema: public
+  - name: topics
+    using:
+      foreign_key_constraint_on:
+        column: question_id
+        table:
+          name: retro_topics
+          schema: public
 insert_permissions:
   - role: facilitator
     permission:
-      columns: [session_id, text]
-      check: &active_facilitator
+      check:
         _and:
-          - *facilitator
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+                is_facilitator:
+                  _eq: true
           - session:
-              ended: {_eq: false}
+              ended:
+                _eq: false
+      columns:
+        - session_id
+        - text
+select_permissions:
+  - role: facilitator
+    permission:
+      columns:
+        - id
+        - session_id
+        - text
+        - created_at
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - session_id
+        - text
+        - created_at
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
 update_permissions:
   - role: facilitator
     permission:
-      columns: [text]
-      filter: *active_facilitator
-      check: *active_facilitator
+      columns:
+        - text
+      filter:
+        _and:
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+                is_facilitator:
+                  _eq: true
+          - session:
+              ended:
+                _eq: false
+      check:
+        _and:
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+                is_facilitator:
+                  _eq: true
+          - session:
+              ended:
+                _eq: false
 delete_permissions:
   - role: facilitator
     permission:
       filter:
         _and:
-          - *active_facilitator
+          - _and:
+              - _exists:
+                  _table:
+                    name: retro_eligible_users
+                    schema: public
+                  _where:
+                    id:
+                      _eq: X-Hasura-User-Id
+                    is_facilitator:
+                      _eq: true
+              - session:
+                  ended:
+                    _eq: false
           - _not:
               answers: {}
