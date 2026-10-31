@@ -32,10 +32,13 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open <http://localhost:5173>. Vite binds to localhost and **fails** if port 5173 is
+Open <http://localhost:5173>. Vite dev/preview bind to `HOST`, defaulting to
+`localhost`; for example, `HOST=0.0.0.0 pnpm dev` allows access from other devices.
+Only use a non-loopback host on a trusted network. Vite **fails** if port 5173 is
 occupied rather than silently selecting another port. Stop it with Ctrl+C.
-`pnpm --filter @retro/frontend preview` serves the production build on the same
-strict port, after `pnpm build` and with the dev server stopped.
+`pnpm --filter @retro/frontend preview` serves the production build with the same
+host/strict-port settings, after `pnpm build` and with the dev server stopped.
+The isolated E2E runner always sets `HOST=localhost`.
 
 Choose the backend path before setup:
 
@@ -71,10 +74,14 @@ started by setup.
 
 ### Public configuration
 
-`frontend/.env.example` documents Auth and the explicit canonical GraphQL
-(Constellation) public URLs. Copy it to `frontend/.env.local` for the existing
-HTTPS developer stack; the example defaults are also used when unset. For the
-isolated stack, the E2E runner supplies its actual public URLs automatically.
+`frontend/.env.example` documents `VITE_NHOST_SUBDOMAIN` and `VITE_NHOST_REGION`.
+The Nhost SDK derives service URLs from those values; both default to `local` for
+the existing HTTPS developer stack. Set your project's subdomain and region in
+`frontend/.env.local` or the environment for a different local/cloud project.
+Optional `VITE_NHOST_AUTH_URL` and `VITE_NHOST_GRAPHQL_URL` overrides take precedence
+for custom endpoints; the isolated E2E runner supplies them automatically to select
+its registered stack and GraphQL engine. Direct GraphQL requests use the SDK's
+resolved endpoint too.
 **All `VITE_*` values are public browser inputs. Never add admin secrets, JWT signing
 keys, database passwords or SMTP credentials.** Local environment files are ignored.
 

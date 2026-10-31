@@ -465,3 +465,16 @@
   of page-close events; genuine transport failures still fail, credentials
   stay stripped and no retries were added. Seven unit cases exercise the
   bridge; both complete browser engine suites passed afterward.
+
+## Environment-based frontend configuration
+
+- **Let the SDK derive project endpoints.** `VITE_NHOST_SUBDOMAIN` and
+  `VITE_NHOST_REGION` default to `local`; Nhost JS derives all service URLs.
+  Optional Auth/GraphQL URL overrides remain for custom endpoints and isolated
+  acceptance, whose non-default ports and Hasura lane cannot be represented by
+  project coordinates alone. Direct GraphQL requests use `nhost.graphql.url`, so
+  they cannot drift from the client. Auth lifecycle coordination is unchanged.
+- **Make the listen host explicit without changing the port.** Dev and preview
+  use `HOST`, defaulting to `localhost`, while retaining strict port 5173. The
+  E2E runner forces localhost independently of a developer's host override, so
+  acceptance stays loopback-only.

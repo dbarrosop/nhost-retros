@@ -1,15 +1,17 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+const host = process.env.HOST || "localhost";
+
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: "localhost",
+    host,
     port: 5173,
     strictPort: true,
   },
   preview: {
-    host: "localhost",
+    host,
     port: 5173,
     strictPort: true,
   },

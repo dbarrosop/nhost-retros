@@ -87,10 +87,13 @@ pnpm local:apply
 pnpm dev
 ```
 
-The app at <http://localhost:5173> defaults to public Auth
+The app at <http://localhost:5173> defaults to `VITE_NHOST_SUBDOMAIN=local` and
+`VITE_NHOST_REGION=local`. The SDK derives Auth
 `https://local.auth.local.nhost.run/v1` and canonical Constellation
-`https://local.graphql.local.nhost.run/v1`. No `.env.local` is needed for these
-defaults; an existing public override must point to the intended developer stack.
+`https://local.graphql.local.nhost.run/v1` from those values. No `.env.local` is
+needed for the defaults; set the two project values for another local/cloud
+project. Optional service-URL overrides take precedence and must point to the
+intended developer stack.
 The setup script does not start a persistent frontend server. Stop it with Ctrl+C
 when you start `pnpm dev` yourself; the execution parent may manage that process.
 
@@ -562,8 +565,10 @@ and reviews them; never guess URLs or commit credentials.
 ### Operator-supplied configuration
 
 - Approved HTTPS SPA, Auth and canonical Constellation GraphQL origins, valid TLS,
-  DNS and a static host. Build with only `VITE_NHOST_AUTH_URL` and
-  `VITE_NHOST_GRAPHQL_URL`; these are public build-time inputs, not runtime secrets.
+  DNS and a static host. Build with `VITE_NHOST_SUBDOMAIN` and `VITE_NHOST_REGION`
+  for the Nhost project. Use optional `VITE_NHOST_AUTH_URL` and
+  `VITE_NHOST_GRAPHQL_URL` overrides only for custom endpoints; all four are public
+  build-time inputs, not runtime secrets.
   Confirm the deployed bundle targets the approved backend, not localhost. No
   admin secret, database URL, signing key or SMTP password belongs in any `VITE_*`
   variable, static file, source map, CI artifact or browser storage.

@@ -15,6 +15,8 @@ await main(async () => {
     // Only public URLs go to Vite. Tokens stay in fixture process memory, not VITE_*.
     await runSuite(["--filter", "@retro/frontend", "exec", "playwright", "test"], {
       ...process.env,
+      // Developer HOST overrides must not expose the acceptance server beyond loopback.
+      HOST: "localhost",
       VITE_NHOST_AUTH_URL: target.endpoints.auth,
       VITE_NHOST_GRAPHQL_URL: e2eEndpoint(target, engine),
       RETRO_TEST_GRAPHQL_ENGINE: engine,
