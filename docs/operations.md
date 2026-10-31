@@ -105,12 +105,13 @@ with pg's identifier escaper (Postgres does not accept parameters for identifier
 
 The first migration registers `facilitator` in `auth.roles`, granting nobody
 membership. Scratch checks exercise up/down/up and prove down refuses an existing
-grant without removing it. Before app permissions exist, Hasura's role query schema
-contains only `no_queries_available`; Constellation explicitly reports no role
-schema. The real-JWT harness checks `user`, `me` and provisioned `facilitator`
-contracts without adding fake app access. Live data-layer revocation checks arrive
-with app permissions in the next slice; old JWT role claims themselves cannot be
-rewritten by a SQL revoke.
+grant without removing it. The next migration adds sessions/questions, locking
+triggers and the live eligibility view. `user` and trusted `facilitator` JWTs now
+have explicit app read schemas on both engines; only facilitators have management
+mutations. Internal `me` still has no app schema (Hasura's empty-role stub versus
+Constellation's missing-role response). No role can select the eligibility view
+or an Auth directory. Live SQL membership revocation denies facilitator data even
+with an old JWT; external email changes also deny existing and refreshed JWTs.
 
 ## Auth fixture and rate budgets
 
@@ -141,9 +142,12 @@ non-email `/signin/email-password` request and reuses `/token` refresh thereafte
 This is test-only, not a password UI. Tokens/passwords stay in process memory;
 no repository token cache, storageState, traces, screenshots or video is written.
 Assertions use sanitized messages instead of comparing secret values. Fixture
-users are removed after checks. Future non-OTP browser journeys should seed the
-SDK session in memory from these fixtures; only dedicated OTP journeys spend the
-separate email budget. Mailhog is isolated in this test project, not external SMTP.
+users are removed after checks. Non-OTP browser journeys seed SDK session storage
+from these in-memory fixtures; only dedicated OTP journeys spend the separate
+email budget. Seed once per browser context, not per tab: the SPA rotates refresh
+tokens, so replaying the original token into a later tab invalidates its session.
+No storageState files are written. Mailhog is isolated in this test project, not
+external SMTP.
 
 OTP acceptance now uses real signup/sign-in/verification and Mailhog on desktop
 and mobile. Each browser group spends three email-path requests and five
@@ -155,8 +159,9 @@ refresh, fake facilitator headers and grant/revoke JWT refreshes are also tested
 Role-header denial probes use `__typename`, not an inaccessible table (which can
 fail even when the role is accepted). They require Hasura's `access-denied` code
 and Constellation HTTP 401, with accepted user/granted-facilitator controls.
-Before app permissions exist, accepted Constellation roles return HTTP 200 with
+For internal roles without app permissions, Constellation returns HTTP 200 with
 `no schema available for role: <role>`; that is distinct from role denial.
+Application roles instead have a positive `__typename` control on both engines.
 All groups remain sequential and fail unexpected 429s.
 
 Public test URLs are supplied explicitly as `VITE_NHOST_AUTH_URL` and
@@ -243,9 +248,36 @@ default role `user` and ordinary user membership. Grants/revokes are idempotent;
 revocation still works after eligibility is lost. The command never changes the
 default role or accepts user metadata as authority. `facilitator` is not in the
 signup-requestable roles. Refresh/re-sign-in (or focus the existing SPA) to obtain
-new JWT claims; the account shell shows confirmed membership, with no unfinished
-board controls. Production provisioning/deployment remains deferred. Tests touch
-only the separately registered disposable database, never the developer stack.
+new JWT claims. Use **Facilitator workspace** for session/question management;
+the default workspace remains participant-only. Production provisioning/deployment
+remains deferred. Tests touch only the separately registered disposable database,
+never the developer stack.
+
+## Session lifecycle and acceptance fixtures
+
+Eligible accounts can browse every active and ended session and its questions.
+Only trusted facilitators manage content. End confirmation is irreversible: a
+closed session cannot be renamed, reopened or deleted, and its questions cannot
+be added/edited/deleted. Database triggers lock before inspecting closure, so
+concurrent/stale API writes cannot bypass this rule. Empty-only deletion and
+restrictive foreign keys prevent accidental cascades. No answers/topics/boards
+exist in this slice.
+
+The UI counts Unicode code points, not JavaScript UTF-16 length. SQL applies the
+same explicit whitespace trimming set: names allow 1–120 code points and questions
+1–500. Dirty question/rename drafts survive polling and failed writes. Closure
+leaves unsaved text visible but disabled. Confirmations start on Cancel; native
+`dialog.close()` precedes focus restoration (removal alone loses focus in Chromium).
+
+`pnpm test:backend` proves eligibility/role revocation and CRUD on both engines,
+then observes actual Postgres blocking relationships for both closure lock orders
+and rollback. Synthetic ended sessions intentionally remain in the disposable
+API database, since ordinary SQL cannot erase frozen content. To clear all test
+fixtures, use only the registered target's guarded destroy/provision lifecycle;
+do not disable triggers or delete developer data. Scratch migration down/up is
+still confined to its minted database. `pnpm test:e2e` applies current migrations
+and metadata independently and checks desktop/mobile management and read-only
+participant flows, including cross-tab closure and draft retention.
 
 ## Production (deferred)
 

@@ -5,13 +5,15 @@ TanStack Router and TanStack Query, backed by Nhost Auth and GraphQL.
 
 ## Current slice
 
-Verified company OTP signup/sign-in, session restoration, cross-tab signout and
-an authenticated account shell are implemented alongside the responsive welcome
-screen. Only exact `@nhost.io` addresses are admitted; no password UI exists.
-Trusted local operators can grant/revoke global facilitator membership. Sessions,
-private answers and clustering arrive in later slices; **no application-data
-permissions exist yet**. Welcome prompts are editorial, not participant content.
-The welcome screen alone needs no backend; signing in needs the local Nhost stack.
+Verified company OTP signup/sign-in, restoration and cross-tab signout lead to
+shared active/ended retrospectives and their questions. Participants browse;
+operator-provisioned facilitators create, rename, delete empty sessions, manage
+questions and permanently end conversations. Backend permissions recheck live
+account eligibility and trusted membership; database locks freeze closed content
+even for stale/concurrent clients. Only exact `@nhost.io` accounts are admitted;
+no password UI exists. Private answer cards and clustering are not implemented yet.
+Welcome prompts remain editorial, not participant content. The welcome screen
+alone needs no backend; accounts and retrospectives need a migrated local stack.
 
 ## Local development
 
@@ -55,7 +57,10 @@ nix flake check
 
 `pnpm format` applies Biome formatting, import organization and safe fixes. Tests
 use Vitest, jsdom and Testing Library to exercise routes, OTP forms, guarded access,
-auth generations and late-response rejection. Backend unit tests exercise target
+auth generations, session/question management, draft preservation and late-response
+rejection. Both GraphQL engines are tested with real JWTs for live eligibility,
+revocation, management permissions and immutable closure. Controlled Postgres
+connections prove both closure lock orders and rollback behavior. Backend unit tests exercise target
 guards, operator loopback connections, occupied ports, budgets and metadata loading.
 CI also provisions the isolated stack and executes the real-JWT, scratch-migration
 and Playwright gates, with matching Nix browsers.

@@ -107,9 +107,11 @@ describe("real disposable Auth/JWT harness", () => {
         for (const url of [target.endpoints.hasura, target.endpoints.graphql]) {
           const fields = await roleSchema(target, url, fixture.session.accessToken, "user", true);
           assert(
-            JSON.stringify(fields) ===
-              JSON.stringify(url === target.endpoints.hasura ? ["no_queries_available"] : []),
-            "Unexpected fields in Phase 2 user schema",
+            fields.includes("retroSessions") &&
+              fields.includes("retroQuestions") &&
+              !fields.includes("users") &&
+              !fields.includes("retro_eligible_users"),
+            "Participant schema is missing app reads or exposes private directories",
           );
           const invalid = await request(
             target,

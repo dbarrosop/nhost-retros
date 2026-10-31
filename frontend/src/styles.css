@@ -530,8 +530,236 @@ button:disabled {
   flex-wrap: wrap;
 }
 .workspace {
-  padding-block: 4rem;
+  padding-block: 2rem 4rem;
   min-height: 75vh;
+}
+.workspace-intro,
+.session-intro {
+  padding-block: 3rem 1rem;
+}
+.workspace .account-panel {
+  margin-top: 0;
+  padding: 1.25rem 1.5rem;
+}
+.workspace .account-panel h2 {
+  font-size: 1rem;
+}
+.workspace .account-panel p {
+  margin-bottom: 0;
+  font-size: 0.8rem;
+}
+.workspace .hero-description {
+  max-width: 40rem;
+}
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+button.primary-link {
+  border: 0;
+}
+.section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 2.5rem 1.25rem;
+}
+.section-heading h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+.editor-panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: clamp(1.25rem, 3vw, 2rem);
+  margin-block: 1.5rem;
+}
+.editor-panel h2,
+.editor-panel h3 {
+  margin: 0 0 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+.text-form {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 45rem;
+}
+.text-form label {
+  font-size: 0.85rem;
+}
+.text-form input,
+.text-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #58665c;
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--text);
+  padding: 0.85rem;
+  min-height: 48px;
+  line-height: 1.6;
+}
+.text-form textarea {
+  resize: vertical;
+}
+.text-form .action-row {
+  margin-top: 0.5rem;
+}
+.session-list,
+.question-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.session-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.session-link {
+  position: relative;
+  display: block;
+  height: 100%;
+  padding: 1.5rem 3rem 1.5rem 1.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 12px;
+  transition: border-color 120ms;
+}
+.session-link:hover {
+  border-color: #718c77;
+}
+.session-link h3 {
+  margin-block: 1.25rem 2rem;
+  line-height: 1.4;
+  font-size: 1.3rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.session-status {
+  display: inline-block;
+  border: 1px solid #526d59;
+  border-radius: 20px;
+  color: var(--accent);
+  background: #263b2c;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+}
+.session-status.ended {
+  background: #292e2a;
+  border-color: #4a554d;
+  color: #c2c9c4;
+}
+.session-arrow {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  color: var(--accent);
+}
+.session-intro h1 {
+  margin-top: 1.5rem;
+  overflow-wrap: anywhere;
+}
+.session-actions {
+  border-block: 1px solid var(--border);
+  padding-block: 1.25rem;
+}
+.empty-state {
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.empty-state h3 {
+  color: var(--text);
+  font-weight: 500;
+  margin: 0;
+}
+.empty-state p {
+  margin-bottom: 0;
+}
+.question-item {
+  display: flex;
+  gap: clamp(1rem, 3vw, 2rem);
+  padding-block: 1.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.question-number {
+  font-size: 0.8rem;
+  color: var(--accent);
+  padding-top: 0.3rem;
+}
+.question-content {
+  min-width: 0;
+  flex: 1;
+}
+.question-content h3 {
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.question-content .text-form {
+  margin-block: 1.5rem;
+}
+dialog {
+  width: min(34rem, calc(100% - 2rem));
+  border: 1px solid #58665c;
+  border-radius: 14px;
+  padding: 2rem;
+  background: var(--surface);
+  color: var(--text);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+dialog::backdrop {
+  background: #050a08cc;
+}
+dialog h2 {
+  margin-top: 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+dialog .dialog-description {
+  line-height: 1.8;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 760px) {
+  .session-list {
+    grid-template-columns: 1fr;
+  }
+  .workspace-intro,
+  .session-intro {
+    padding-top: 2.5rem;
+  }
+  .account-panel .action-row {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .session-link {
+    transition: none;
+  }
 }
 .account-panel {
   margin-top: 2.5rem;

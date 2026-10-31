@@ -58,9 +58,11 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     );
     await page.reload();
     await expect(page.getByRole("heading", { name: "Welcome to the team space." })).toBeVisible();
-    await expect(page.getByRole("status")).toContainText("retry automatically");
+    await expect(page.getByRole("status", { name: "Session connection" })).toContainText(
+      "retry automatically",
+    );
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
-    await expect(page.getByRole("status")).not.toBeVisible();
+    await expect(page.getByRole("status", { name: "Session connection" })).not.toBeVisible();
     const other = await context.newPage();
     await other.goto("/workspace");
     await expect(other.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();

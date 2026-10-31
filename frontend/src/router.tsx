@@ -83,7 +83,31 @@ const workspaceRoute = createRoute({
   path: "/workspace",
   component: Workspace,
 });
-const routeTree = rootRoute.addChildren([welcomeRoute, authRoute, workspaceRoute]);
+const facilitatorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/facilitate",
+  component: () => <Workspace appRole="facilitator" />,
+});
+const sessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sessions/$sessionId",
+  component: () => <Workspace sessionId={sessionRoute.useParams().sessionId} />,
+});
+const facilitatorSessionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/facilitate/$sessionId",
+  component: () => (
+    <Workspace appRole="facilitator" sessionId={facilitatorSessionRoute.useParams().sessionId} />
+  ),
+});
+const routeTree = rootRoute.addChildren([
+  welcomeRoute,
+  authRoute,
+  workspaceRoute,
+  facilitatorRoute,
+  sessionRoute,
+  facilitatorSessionRoute,
+]);
 
 export function createAppRouter(history?: RouterHistory) {
   return createRouter({

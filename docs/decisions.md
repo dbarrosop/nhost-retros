@@ -111,3 +111,42 @@
   CSS colors; code extraction therefore anchors to element text. Backend SQL
   expires only the disposable fixture's OTP to test expiry without waiting or
   weakening Auth. Browser clock advancement tests only the resend cooldown.
+
+## Phase 4 — Shared conversations and immutable closure
+
+- **Live data authorization, not refreshed claims alone.** The tracked but
+  unselectable `retro_eligible_users` view checks verification, disabled/anonymous
+  state, exact case-insensitive company domain, default `user` and live `user`
+  membership. Every app permission uses it; facilitator permissions also require
+  its trusted membership flag. `me` and other internal roles gain no app access.
+  Both engines deny old facilitator JWTs immediately after SQL revocation. Real
+  refreshed JWTs after an external email change also receive no app rows.
+- **One locking boundary per conversation.** Every question write locks the parent
+  session `FOR SHARE` while reading its current `ended` value. Session updates
+  conflict with that lock; an end that wins first makes blocked content writes
+  fail. The database also forbids identity/parent/timestamp changes, reopening and
+  every update/delete of an ended session. Ending and renaming are separate
+  operations. Restrictive foreign keys prevent nonempty session deletion without
+  a cascade or a privileged content-maintenance bypass.
+- **Shared reads, separate management.** Session/question projections are identical
+  for eligible participants and facilitators, so their small typed read documents
+  are shared, with distinct role-scoped cache keys. Session mutation documents
+  are separate and facilitator routes send the explicit `facilitator` role.
+  Participant screens do not expose answer/board placeholders. Polling is
+  introduced now for the usable session slice: mounted visible routes refresh
+  every two seconds, with abort signals, generation acceptance and invalidation.
+  The broader multi-account/offline/board acceptance still belongs to Phase 8.
+- **Plain text without Unicode surprises.** SQL trims the explicit ECMAScript
+  whitespace set; both layers count Unicode code points, including emoji and
+  combining characters. Session names cap at 120, questions at 500. Editors keep
+  dirty text through refetch, failed writes and closure; closure disables retained
+  drafts rather than discarding them. Mutations fail immediately offline rather
+  than queueing an intent for later replay. Native confirmations default to Cancel.
+- **Acceptance remains disposable.** Browser runs now apply current migrations and
+  synchronize both engines before starting Vite, so they do not depend on a prior
+  backend test run. Ended synthetic sessions deliberately remain in the test
+  database until guarded target destruction; cleanup does not bypass the freeze.
+  Browser fixtures seed SDK storage once per context (not per tab): reseeding an
+  old refresh token in a new tab invalidates the rotated session. Native dialogs
+  must leave the modal top layer with `close()` before restoring invoker focus;
+  unmounting an open dialog alone did not restore focus in Chromium.

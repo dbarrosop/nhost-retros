@@ -196,11 +196,7 @@ describe("company OTP policy and trusted roles (ordered groups)", () => {
         ]) {
           const reply = await probe(token, role);
           assert(
-            reply.status === 200 &&
-              (url === target.endpoints.hasura
-                ? Boolean(reply.body.data?.__typename) && !reply.body.errors
-                : reply.body.errors?.length === 1 &&
-                  reply.body.errors[0].message === `no schema available for role: ${role}`),
+            reply.status === 200 && Boolean(reply.body.data?.__typename) && !reply.body.errors,
             "Positive control: JWT role was not accepted",
           );
         }
@@ -218,8 +214,10 @@ describe("company OTP policy and trusted roles (ordered groups)", () => {
         for (const role of ["user", "me", "facilitator"]) {
           const fields = await roleSchema(target, url, granted, role, true);
           assert(
-            fields.every((field) => field === "no_queries_available"),
-            "Internal/trusted role unexpectedly gained app access",
+            role === "me"
+              ? fields.every((field) => field === "no_queries_available")
+              : fields.includes("retroSessions") && !fields.includes("users"),
+            "Application/internal role schema contract changed",
           );
         }
       }
