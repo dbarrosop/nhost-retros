@@ -20,6 +20,12 @@ object_relationships:
   - name: session
     using:
       foreign_key_constraint_on: session_id
+array_relationships:
+  - name: answers
+    using:
+      foreign_key_constraint_on:
+        column: question_id
+        table: {name: retro_answers, schema: public}
 select_permissions:
   - role: user
     permission:
@@ -58,4 +64,8 @@ update_permissions:
 delete_permissions:
   - role: facilitator
     permission:
-      filter: *active_facilitator
+      filter:
+        _and:
+          - *active_facilitator
+          - _not:
+              answers: {}

@@ -150,3 +150,41 @@
   old refresh token in a new tab invalidates the rotated session. Native dialogs
   must leave the modal top layer with `close()` before restoring invoker focus;
   unmounting an open dialog alone did not restore focus in Chromium.
+
+## Phase 5 — Private, multiple reflection cards
+
+- **One thought per card, no per-person uniqueness.** A separate answers table
+  permits multiple cards per question, with indexed author/parent filters and
+  restrictive question/account foreign keys. Shared whitespace trimming and
+  Unicode code-point limits extend to 4,000-character cards. Text-only updates
+  preserve author/identity/parents/creation time; SQL owns the update timestamp.
+- **Private participation is a real API role, not a UI filter.** Participant
+  projections omit author IDs; every answer select/insert/update/delete checks
+  live eligibility and ownership, with author set from the JWT. Updates also have
+  explicit post-update checks. Relationships to shared questions filter answer
+  collections again, and neither role gets aggregates or an Auth directory.
+  Trusted facilitators have read-all including author IDs, but no answer-content
+  mutations; they use the ordinary participant route to contribute. Author
+  names/emails, topics and board UI remain deferred to their planned slices.
+- **The same closure lock covers every content write.** Answer triggers join the
+  immutable question parent and read the session’s current ended state while
+  acquiring `FOR SHARE OF s`. Direct SQL, real JWT requests, both lock orders and
+  write/close rollbacks prove insert/edit/delete serialization. Question deletion
+  requires no answers at both permission and foreign-key boundaries. Retained
+  answers deliberately prevent account deletion; disposable test cleanup retires
+  such accounts and revokes sessions/membership instead of erasing frozen content.
+- **Calm editors retain intent, not optimistic content.** Role/generation-scoped,
+  abortable queries poll mounted participant cards using the existing lifecycle.
+  Mutations remain server-authoritative and invalidate queries. Stable card IDs
+  keep dirty edits through refetch; stale failed submissions and closure retain
+  both edited and new drafts, disabled after ending. Wrapped post-its, explicit
+  labels, native delete confirmation and focus targets support mobile/keyboard
+  use. Post-confirm focus callbacks run only after `dialog.close()` because
+  elements outside a native modal are inert. Cancel/Escape return to the trigger;
+  confirmed card/question deletion and ending focus a persistent section heading.
+  Pending text forms use read-only fields and guarded, aria-disabled submit
+  buttons instead of disabling focused controls, so keyboard submissions retain
+  focus without allowing duplicate writes. Closed forms remain truly disabled.
+  Role-specific documents live in dependency-light modules so real-JWT tests
+  execute the same queries and inspect actual role input/output schemas, without
+  introducing codegen or a second client/cache layer.

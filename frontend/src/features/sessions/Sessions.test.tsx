@@ -76,7 +76,11 @@ function setup(facilitator: boolean, path: string) {
       }
       return failedRead
         ? Response.json({ errors: [{ message: "private engine details" }] })
-        : Response.json({ data: { retroSessions: [record] } });
+        : Response.json({
+            data: body.query.includes("MyAnswers")
+              ? { retroAnswers: [] }
+              : { retroSessions: [record] },
+          });
     }),
   );
   const router = createAppRouter(createMemoryHistory({ initialEntries: [path] }));
@@ -109,7 +113,7 @@ afterEach(() => {
 });
 
 describe("authorized retrospective workspace", () => {
-  it("shows participant reads without unfinished controls and redirects facilitator guesses", async () => {
+  it("shows private-card participation without management controls and redirects facilitator guesses", async () => {
     const app = setup(false, `/facilitate/${sessionId}`);
     expect(
       await screen.findByRole("heading", { name: "Welcome to the team space." }),
@@ -118,7 +122,7 @@ describe("authorized retrospective workspace", () => {
     expect(await screen.findByRole("heading", { name: "What helped?" })).toBeVisible();
     expect(
       screen.queryByRole("button", {
-        name: /Create session|End session|Edit question|Move|Answer/,
+        name: /Create session|End session|Edit question|Move/,
       }),
     ).not.toBeInTheDocument();
     expect(app.roles.every((role) => role === "user")).toBe(true);

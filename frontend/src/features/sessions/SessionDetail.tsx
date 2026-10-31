@@ -41,7 +41,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             </h1>
             <p className="hero-description">
               {session.ended
-                ? "This conversation has ended. Its name and questions are now permanently read-only."
+                ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only."
                 : "Take a moment to look back. These questions are shared with everyone on the team."}
             </p>
           </div>
@@ -79,7 +79,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
               <ConfirmAction
                 label="End session"
                 title="End this retrospective?"
-                description="Ending is permanent. The session name and questions will be frozen, including changes from other open tabs. You cannot reopen it."
+                description="Ending is permanent. The session name, questions and answer cards will be frozen, including changes from other open tabs. You cannot reopen it."
                 disabled={change.isPending}
                 onConfirm={async () => {
                   await change.mutateAsync({
@@ -87,8 +87,8 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
                     variables: { id },
                     field: "updateRetroSessions",
                   });
-                  document.getElementById("session-title")?.focus();
                 }}
+                afterConfirm={() => document.getElementById("session-title")?.focus()}
               />
               {session.questions.length === 0 && (
                 <ConfirmAction
@@ -107,6 +107,13 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
                 />
               )}
             </div>
+          )}
+          {role === "facilitator" && (
+            <p>
+              <Link className="quiet-link" to="/sessions/$sessionId" params={{ sessionId: id }}>
+                View and write your own reflection cards →
+              </Link>
+            </p>
           )}
           <Questions
             questions={session.questions}

@@ -560,7 +560,8 @@ button:disabled {
 button {
   cursor: pointer;
 }
-button:disabled {
+button:disabled,
+button[aria-disabled="true"] {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -809,4 +810,58 @@ dialog .dialog-description {
     font-size: 0.8rem;
     gap: 0.3rem;
   }
+}
+
+.answers-section {
+  margin-top: 1.75rem;
+}
+.answers-section h4 {
+  margin-bottom: 0.6rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+.answer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+  gap: 1rem;
+  margin-block: 1.25rem;
+}
+.answer-card {
+  min-width: 0;
+  border: 1px solid #596451;
+  border-radius: 4px 14px 14px;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: #2c3528;
+}
+.answer-card:nth-child(3n + 2) {
+  background: #382e29;
+  border-color: #70594a;
+}
+.answer-card:nth-child(3n) {
+  background: #283538;
+  border-color: #4c666c;
+}
+.answer-card h5 {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.answer-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+  margin-block: 1rem 1.5rem;
+}
+.answer-card .secondary-button {
+  white-space: normal;
+  text-align: left;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.8rem;
+}
+.answer-composer {
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
 }

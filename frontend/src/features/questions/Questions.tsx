@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AppRole } from "../../lib/retro-api";
+import { Answers } from "../answers/Answers";
 import type { Question } from "../sessions/api";
 import { ConfirmAction, TextForm, useChange } from "../sessions/controls";
 import { addQuestion, deleteQuestion, editQuestion } from "./api";
@@ -46,7 +47,8 @@ export function Questions({
             key={question.id}
             question={question}
             number={index + 1}
-            ended={locked}
+            ended={ended}
+            readOnly={readOnly}
             role={role}
           />
         ))}
@@ -79,11 +81,13 @@ function QuestionItem({
   question,
   number,
   ended,
+  readOnly,
   role,
 }: {
   question: Question;
   number: number;
   ended: boolean;
+  readOnly: boolean;
   role: AppRole;
 }) {
   const [editing, setEditing] = useState(false);
@@ -102,7 +106,7 @@ function QuestionItem({
             multiline
             maximum={500}
             submit="Save question"
-            disabled={ended}
+            disabled={ended || readOnly}
             onCancel={() => setEditing(false)}
             onSave={async (text) => {
               await change.mutateAsync({
@@ -114,7 +118,10 @@ function QuestionItem({
             }}
           />
         )}
-        {role === "facilitator" && !ended && (
+        {role === "user" && (
+          <Answers questionId={question.id} number={number} ended={ended} readOnly={readOnly} />
+        )}
+        {role === "facilitator" && !ended && !readOnly && (
           <div className="action-row">
             {!editing && (
               <button className="secondary-button" type="button" onClick={() => setEditing(true)}>
@@ -132,8 +139,8 @@ function QuestionItem({
                   variables: { id: question.id },
                   field: "deleteRetroQuestions",
                 });
-                document.getElementById("questions-title")?.focus();
               }}
+              afterConfirm={() => document.getElementById("questions-title")?.focus()}
             />
           </div>
         )}

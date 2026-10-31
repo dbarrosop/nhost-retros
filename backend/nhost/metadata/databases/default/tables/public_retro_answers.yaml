@@ -1,0 +1,68 @@
+table:
+  name: retro_answers
+  schema: public
+configuration:
+  custom_name: retroAnswers
+  custom_column_names:
+    question_id: questionId
+    author_id: authorId
+    created_at: createdAt
+    updated_at: updatedAt
+  custom_root_fields:
+    select: retroAnswers
+    select_by_pk: retroAnswer
+    select_aggregate: retroAnswersAggregate
+    insert: insertRetroAnswers
+    insert_one: insertRetroAnswer
+    update: updateRetroAnswers
+    update_by_pk: updateRetroAnswer
+    delete: deleteRetroAnswers
+    delete_by_pk: deleteRetroAnswer
+object_relationships:
+  - name: question
+    using:
+      foreign_key_constraint_on: question_id
+select_permissions:
+  - role: user
+    permission:
+      columns: [id, question_id, text, created_at, updated_at]
+      allow_aggregations: false
+      filter: &own_eligible
+        _and:
+          - author_id: {_eq: X-Hasura-User-Id}
+          - _exists:
+              _table: {name: retro_eligible_users, schema: public}
+              _where:
+                id: {_eq: X-Hasura-User-Id}
+  - role: facilitator
+    permission:
+      columns: [id, question_id, author_id, text, created_at, updated_at]
+      allow_aggregations: false
+      filter:
+        _exists:
+          _table: {name: retro_eligible_users, schema: public}
+          _where:
+            id: {_eq: X-Hasura-User-Id}
+            is_facilitator: {_eq: true}
+insert_permissions:
+  - role: user
+    permission:
+      columns: [question_id, text]
+      set:
+        author_id: X-Hasura-User-Id
+      check: &own_active
+        _and:
+          - *own_eligible
+          - question:
+              session:
+                ended: {_eq: false}
+update_permissions:
+  - role: user
+    permission:
+      columns: [text]
+      filter: *own_active
+      check: *own_active
+delete_permissions:
+  - role: user
+    permission:
+      filter: *own_active

@@ -53,7 +53,8 @@ export function TextForm({
   const input = {
     id,
     value,
-    disabled: disabled || pending,
+    disabled,
+    readOnly: pending,
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setValue(event.target.value);
       onDirty?.(Boolean(event.target.value));
@@ -64,8 +65,10 @@ export function TextForm({
   return (
     <form
       className="text-form"
+      aria-busy={pending}
       onSubmit={async (event) => {
         event.preventDefault();
+        if (disabled || pending) return;
         setError("");
         let text: string;
         try {
@@ -99,7 +102,7 @@ export function TextForm({
         <p className="field-hint">This session is read-only. Your unsaved draft is kept above.</p>
       )}
       <div className="action-row">
-        <button className="primary-link" disabled={disabled || pending} type="submit">
+        <button className="primary-link" disabled={disabled} aria-disabled={pending} type="submit">
           {pending ? "Saving…" : submit}
         </button>
         {onCancel && (
@@ -117,12 +120,14 @@ export function ConfirmAction({
   title,
   description,
   onConfirm,
+  afterConfirm,
   disabled = false,
 }: {
   label: string;
   title: string;
   description: string;
   onConfirm: () => Promise<unknown>;
+  afterConfirm?: () => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -145,9 +150,10 @@ export function ConfirmAction({
           label={label}
           disabled={disabled}
           onConfirm={onConfirm}
-          onClose={() => {
+          onClose={(confirmed) => {
             setOpen(false);
-            trigger.current?.focus();
+            if (confirmed && afterConfirm) afterConfirm();
+            else trigger.current?.focus();
           }}
         />
       )}
@@ -167,7 +173,7 @@ function Confirmation({
   label: string;
   disabled: boolean;
   onConfirm: () => Promise<unknown>;
-  onClose: () => void;
+  onClose: (confirmed: boolean) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
@@ -178,10 +184,10 @@ function Confirmation({
     dialog?.showModal();
     return () => dialog?.close();
   }, []);
-  const finish = () => {
-    // Leave the native modal top layer before restoring focus to its invoker.
+  const finish = (confirmed = false) => {
+    // Outside targets are inert until the native modal leaves the top layer.
     ref.current?.close();
-    onClose();
+    onClose(confirmed);
   };
   return (
     <dialog
@@ -203,7 +209,12 @@ function Confirmation({
         </p>
       )}
       <div className="action-row">
-        <button className="secondary-button" type="button" disabled={pending} onClick={finish}>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={pending}
+          onClick={() => finish()}
+        >
           Cancel
         </button>
         <button
@@ -215,7 +226,7 @@ function Confirmation({
             setError("");
             try {
               await onConfirm();
-              finish();
+              finish(true);
             } catch {
               setError(changeFailed);
             } finally {

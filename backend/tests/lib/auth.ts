@@ -171,7 +171,21 @@ export async function actor(group: AuthGroup): Promise<Actor> {
 export async function cleanupActor(target: Target, id: string) {
   const client = await connect(target);
   try {
-    await client.query("DELETE FROM auth.users WHERE id=$1", [id]);
+    const answers = await client.query("SELECT to_regclass('public.retro_answers') AS name");
+    if (
+      answers.rows[0].name &&
+      (await client.query("SELECT 1 FROM retro_answers WHERE author_id=$1 LIMIT 1", [id])).rowCount
+    ) {
+      // Frozen cards intentionally retain their author FK. Retire the disposable
+      // account instead of bypassing the freeze or cascading away content.
+      await client.query("UPDATE auth.users SET disabled=true WHERE id=$1", [id]);
+      await client.query("DELETE FROM auth.refresh_tokens WHERE user_id=$1", [id]);
+      await client.query("DELETE FROM auth.user_roles WHERE user_id=$1 AND role='facilitator'", [
+        id,
+      ]);
+    } else {
+      await client.query("DELETE FROM auth.users WHERE id=$1", [id]);
+    }
   } finally {
     await client.end();
   }

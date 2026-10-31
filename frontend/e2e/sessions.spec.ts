@@ -87,6 +87,7 @@ test("participants browse; trusted facilitators manage questions and permanently
     await page.getByRole("button", { name: "Delete question 2", exact: true }).click();
     await deletion.getByRole("button", { name: "Delete question 2", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Temporary question" })).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: "Questions", exact: true })).toBeFocused();
 
     const reader = await readerContext.newPage();
     const readerRoles: string[] = [];
@@ -119,6 +120,7 @@ test("participants browse; trusted facilitators manage questions and permanently
     await expect(closing.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
     await closing.getByRole("button", { name: "End session", exact: true }).click();
     await expect(page.getByText(/permanently read-only/)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: `${name} · October` })).toBeFocused();
     await expect(reader.getByText(/permanently read-only/)).toBeVisible({ timeout: 5_000 });
     await expect(stale.getByLabel("Edit question 1", { exact: true })).toBeDisabled({
       timeout: 5_000,

@@ -142,7 +142,9 @@ non-email `/signin/email-password` request and reuses `/token` refresh thereafte
 This is test-only, not a password UI. Tokens/passwords stay in process memory;
 no repository token cache, storageState, traces, screenshots or video is written.
 Assertions use sanitized messages instead of comparing secret values. Fixture
-users are removed after checks. Non-OTP browser journeys seed SDK session storage
+users without answers are removed after checks. Authors retained by answer foreign
+keys are instead disabled, have refresh sessions removed and facilitator membership
+revoked; their cards and author records remain until guarded target destruction. Non-OTP browser journeys seed SDK session storage
 from these in-memory fixtures; only dedicated OTP journeys spend the separate
 email budget. Seed once per browser context, not per tab: the SPA rotates refresh
 tokens, so replaying the original token into a later tab invalidates its session.
@@ -258,14 +260,15 @@ never the developer stack.
 Eligible accounts can browse every active and ended session and its questions.
 Only trusted facilitators manage content. End confirmation is irreversible: a
 closed session cannot be renamed, reopened or deleted, and its questions cannot
-be added/edited/deleted. Database triggers lock before inspecting closure, so
-concurrent/stale API writes cannot bypass this rule. Empty-only deletion and
-restrictive foreign keys prevent accidental cascades. No answers/topics/boards
-exist in this slice.
+be added/edited/deleted. Answer cards also become immutable. Database triggers lock
+before inspecting closure, so concurrent/stale API writes cannot bypass this rule.
+Empty-only deletion and restrictive foreign keys prevent accidental cascades.
+Topics/boards are not yet implemented.
 
 The UI counts Unicode code points, not JavaScript UTF-16 length. SQL applies the
-same explicit whitespace trimming set: names allow 1–120 code points and questions
-1–500. Dirty question/rename drafts survive polling and failed writes. Closure
+same explicit whitespace trimming set: names allow 1–120 code points, questions
+1–500 and answer cards 1–4,000. Dirty card/question/rename drafts survive polling
+and failed writes. Closure
 leaves unsaved text visible but disabled. Confirmations start on Cancel; native
 `dialog.close()` precedes focus restoration (removal alone loses focus in Chromium).
 
@@ -277,7 +280,32 @@ fixtures, use only the registered target's guarded destroy/provision lifecycle;
 do not disable triggers or delete developer data. Scratch migration down/up is
 still confined to its minted database. `pnpm test:e2e` applies current migrations
 and metadata independently and checks desktop/mobile management and read-only
-participant flows, including cross-tab closure and draft retention.
+participant flows, including multiple private cards, cross-tab closure and draft
+retention. Participant card reads omit author IDs; facilitators may read all cards
+and author IDs but cannot edit/delete others’ content. For their own participation,
+facilitators follow the session’s participant link, which sends the ordinary user
+role. Author names/emails and grouping are not yet exposed.
+
+Answer-to-question and answer-to-author foreign keys are intentionally restrictive.
+Deleting an account with retained cards fails, even for a trusted SQL operator;
+there is no content cascade or maintenance bypass. Retention/deletion work needs an
+explicit, backed-up operator procedure, not trigger disabling in routine cleanup.
+
+### Browser harness pitfalls
+
+- Chromium’s local host-resolver mapping does not apply to Playwright `route.fetch`
+  (Node APIRequestContext). Use `route.continue` for real browser traffic and passive
+  response capture when replaying a stale read. APIRequestContext failures can print
+  Authorization headers; never use it with fixture JWTs or persist those diagnostics.
+- GraphQL race probes must send exactly the variables declared in each document.
+  An unused variable can be rejected before reaching SQL, falsely appearing to prove
+  authorization and never exercising the intended lock wait.
+- jsdom lacks native modal methods. Unit setup supplies only open/close state;
+  real modal top-layer behavior and focus restoration are Playwright assertions.
+  Elements outside an open modal are inert: set post-confirm focus only after
+  `dialog.close()`, not inside the awaited mutation callback. Disabling a focused
+  text field/button also blurs it in Chromium; pending forms keep controls
+  focusable using read-only/aria-disabled plus a submit guard.
 
 ## Production (deferred)
 

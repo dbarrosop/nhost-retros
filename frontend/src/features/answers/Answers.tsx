@@ -1,0 +1,158 @@
+import { useRef, useState } from "react";
+import { readFailed, useRetroQuery } from "../../lib/retro-api";
+import { ConfirmAction, TextForm, useChange } from "../sessions/controls";
+import {
+  type Answer,
+  type AnswersResult,
+  addAnswer,
+  answersQuery,
+  deleteAnswer,
+  editAnswer,
+} from "./api";
+
+export function Answers({
+  questionId,
+  number,
+  ended,
+  readOnly,
+}: {
+  questionId: string;
+  number: number;
+  ended: boolean;
+  readOnly: boolean;
+}) {
+  const query = useRetroQuery<AnswersResult>("user", ["answers", questionId], answersQuery, {
+    questionId,
+  });
+  const change = useChange("user");
+  const [dirty, setDirty] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const locked = ended || readOnly || query.isError || query.isPending;
+  return (
+    <section className="answers-section" aria-labelledby={`answers-${questionId}`}>
+      <h4 ref={heading} id={`answers-${questionId}`} tabIndex={-1}>
+        Your reflection cards
+      </h4>
+      <p className="field-hint">
+        Only you and trusted facilitators can read your cards. Add a separate card for each thought.
+      </p>
+      {query.isPending && <p role="status">Loading your cards…</p>}
+      {query.isError && <p role="alert">{readFailed} Any unsaved draft is kept below.</p>}
+      {query.data?.retroAnswers.length === 0 && (
+        <p className="field-hint">
+          {ended
+            ? "You didn’t add any cards to this question."
+            : "A small observation is a good place to start."}
+        </p>
+      )}
+      <div className="answer-grid">
+        {query.data?.retroAnswers.map((answer, index) => (
+          <AnswerCard
+            key={answer.id}
+            answer={answer}
+            number={index + 1}
+            questionNumber={number}
+            locked={locked}
+            onDeleted={() => heading.current?.focus()}
+          />
+        ))}
+      </div>
+      {(!ended || dirty) && (
+        <div className="answer-composer">
+          <TextForm
+            label={`New card for question ${number}`}
+            multiline
+            maximum={4000}
+            submit={`Add card to question ${number}`}
+            disabled={locked}
+            onDirty={setDirty}
+            onSave={async (text) => {
+              await change.mutateAsync({
+                query: addAnswer,
+                variables: { questionId, text },
+                field: "insertRetroAnswers",
+              });
+              setDirty(false);
+            }}
+          />
+        </div>
+      )}
+      {ended && (
+        <p className="field-hint">This session has ended. Your cards can no longer be changed.</p>
+      )}
+    </section>
+  );
+}
+
+function AnswerCard({
+  answer,
+  number,
+  questionNumber,
+  locked,
+  onDeleted,
+}: {
+  answer: Answer;
+  number: number;
+  questionNumber: number;
+  locked: boolean;
+  onDeleted: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const change = useChange("user");
+  const label = `card ${number} for question ${questionNumber}`;
+  return (
+    <article className="answer-card" aria-labelledby={`card-${answer.id}`}>
+      <h5 ref={heading} id={`card-${answer.id}`} tabIndex={-1}>
+        Card {number}
+      </h5>
+      <p className="answer-text">{answer.text}</p>
+      {editing && (
+        <TextForm
+          label={`Edit ${label}`}
+          initial={answer.text}
+          multiline
+          maximum={4000}
+          submit="Save card"
+          disabled={locked}
+          onCancel={() => {
+            setEditing(false);
+            heading.current?.focus();
+          }}
+          onSave={async (text) => {
+            await change.mutateAsync({
+              query: editAnswer,
+              variables: { id: answer.id, text },
+              field: "updateRetroAnswers",
+            });
+            setEditing(false);
+            heading.current?.focus();
+          }}
+        />
+      )}
+      {!locked && (
+        <div className="action-row">
+          {!editing && (
+            <button className="secondary-button" type="button" onClick={() => setEditing(true)}>
+              Edit {label}
+            </button>
+          )}
+          <ConfirmAction
+            label={`Delete ${label}`}
+            title="Delete your card?"
+            description="This removes only this card. Your other reflections are kept. This cannot be undone."
+            disabled={change.isPending}
+            onConfirm={async () => {
+              await change.mutateAsync({
+                query: deleteAnswer,
+                variables: { id: answer.id },
+                field: "deleteRetroAnswers",
+              });
+            }}
+            afterConfirm={onDeleted}
+          />
+        </div>
+      )}
+    </article>
+  );
+}
