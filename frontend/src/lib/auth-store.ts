@@ -6,16 +6,19 @@ export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export const companyEmail = (email: string) => /^[^\s@]+@nhost\.io$/.test(normalizeEmail(email));
 export function eligible(session: StoredSession | null): session is StoredSession {
   const user = session?.user;
+  // Both app defaults are valid; access still uses explicit roles and membership.
   return Boolean(
     user?.email &&
       companyEmail(user.email) &&
       user.emailVerified &&
       !user.isAnonymous &&
-      user.defaultRole === "user" &&
+      ["user", "facilitator"].includes(user.defaultRole) &&
       user.roles.includes("user"),
   );
 }
 export function authMessage(error: unknown, verifying = false) {
+  if ((error as { code?: string })?.code === "ineligible-session")
+    return "Your account doesn’t have access to this workspace. Use a verified @nhost.io account or contact a facilitator.";
   const status = (error as { status?: number })?.status;
   if (status === 429) return "Too many attempts. Please wait a few minutes before trying again.";
   if (!onlineManager.isOnline() || !status)
@@ -262,7 +265,7 @@ export class AuthStore {
     this.client.sessionStorage.set(response.body.session);
     if (!eligible(this.client.getUserSession())) {
       this.client.clearSession();
-      throw { status: 403 };
+      throw { status: 403, code: "ineligible-session" };
     }
   }
   async signOut() {

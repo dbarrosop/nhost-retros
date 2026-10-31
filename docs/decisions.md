@@ -478,3 +478,19 @@
   use `HOST`, defaulting to `localhost`, while retaining strict port 5173. The
   E2E runner forces localhost independently of a developer's host override, so
   acceptance stays loopback-only.
+
+## OTP session eligibility correction
+
+- **Do not treat the Auth default role as application membership.** A verified,
+  non-anonymous company account with the `user` role remains eligible when its
+  default role is `facilitator`. Both frontend eligibility and the backend view
+  allow the two application defaults (`user` and `facilitator`), not internal
+  defaults such as `me`. Requests still select an explicit role, and live backend
+  membership remains authoritative. A new reversible view migration preserves
+  existing accounts/grants; verification, restoration and refresh retain the
+  valid session.
+- **Distinguish account access from code verification.** If a successful OTP
+  response contains an ineligible account, clear that local session and report
+  account access rather than suggesting the already-verified code was invalid.
+  Other OTP failures retain their existing handling. Regression tests use only
+  synthetic sessions, including the facilitator-default response shape.

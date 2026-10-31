@@ -48,7 +48,7 @@ export function Workspace({
           <h2 id="account-title">{session.user?.email}</h2>
           <p>
             {facilitator
-              ? "Facilitator membership confirmed. Your default role remains participant."
+              ? "Facilitator membership confirmed. You can use either workspace."
               : "Signed in as a participant."}
           </p>
         </div>

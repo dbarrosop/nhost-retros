@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthStore, authMessage, companyEmail, eligible, normalizeEmail } from "./auth-store";
 import { authQueryKey, createQueryClient } from "./query-client";
 
-function testSession(id = "first", roles = ["user", "me"]): Session {
+function testSession(id = "first", roles = ["user", "me"], defaultRole = "user"): Session {
   const payload = { sub: id, exp: Date.now() / 1000 + 900 };
   return {
     accessToken: `e30.${btoa(JSON.stringify(payload))}.test`,
@@ -18,7 +18,7 @@ function testSession(id = "first", roles = ["user", "me"]): Session {
       email: `${id}@nhost.io`,
       emailVerified: true,
       isAnonymous: false,
-      defaultRole: "user",
+      defaultRole,
       roles,
       displayName: "Test participant",
       locale: "en",
@@ -227,14 +227,89 @@ describe("auth lifecycle", () => {
     for (const patch of [
       { emailVerified: false },
       { isAnonymous: true },
-      { defaultRole: "facilitator" },
+      { defaultRole: "me" },
       { email: "a@other.test" },
       { roles: ["me"] },
+      { roles: ["facilitator"] },
     ]) {
       const session = testSession();
       Object.assign(session.user ?? {}, patch);
       client.sessionStorage.set(session);
       expect(eligible(client.getUserSession())).toBe(false);
+    }
+  });
+  it.each(["user", "facilitator"])(
+    "accepts an eligible facilitator with %s as the default role",
+    (defaultRole) => {
+      const { client } = setup();
+      client.sessionStorage.set(
+        testSession("facilitator", ["user", "me", "facilitator"], defaultRole),
+      );
+      expect(eligible(client.getUserSession())).toBe(true);
+    },
+  );
+  it("keeps a successful OTP session with facilitator as its default role", async () => {
+    const { client, store, queries } = setup();
+    const session = testSession("facilitator", ["user", "me", "facilitator"], "facilitator");
+    const verify = vi.spyOn(client.auth, "verifySignInOTPEmail").mockResolvedValue({
+      body: { session },
+      status: 200,
+      headers: new Headers(),
+    });
+    const stop = store.start();
+    try {
+      await store.refresh();
+      await store.verify("FACILITATOR@NHOST.IO", " 123456 ");
+      expect(verify).toHaveBeenCalledWith(
+        { email: "facilitator@nhost.io", otp: "123456" },
+        { signal: expect.any(AbortSignal) },
+      );
+      expect(store.getSnapshot().canQuery).toBe(true);
+      expect(store.getSnapshot().session?.user?.defaultRole).toBe("facilitator");
+      expect(client.getUserSession()?.user?.roles).toContain("facilitator");
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it("restores a facilitator-default session through refresh", async () => {
+    const { client, store, queries } = setup();
+    const session = testSession("facilitator", ["user", "me", "facilitator"], "facilitator");
+    client.sessionStorage.set(session);
+    vi.spyOn(client.auth, "refreshToken").mockResolvedValue(reply(session));
+    const stop = store.start();
+    try {
+      await store.refresh();
+      expect(store.getSnapshot().ready).toBe(true);
+      expect(store.getSnapshot().canQuery).toBe(true);
+      expect(store.getSnapshot().session?.user?.defaultRole).toBe("facilitator");
+      expect(client.getUserSession()).not.toBeNull();
+    } finally {
+      stop();
+      queries.clear();
+    }
+  });
+  it("reports account eligibility rejection separately from invalid OTP codes", async () => {
+    const { client, store, queries } = setup();
+    const session = testSession();
+    if (session.user) session.user.emailVerified = false;
+    vi.spyOn(client.auth, "verifySignInOTPEmail").mockResolvedValue({
+      body: { session },
+      status: 200,
+      headers: new Headers(),
+    });
+    try {
+      await expect(store.verify("first@nhost.io", "123456")).rejects.toMatchObject({
+        status: 403,
+        code: "ineligible-session",
+      });
+      expect(client.getUserSession()).toBeNull();
+      const message = authMessage({ status: 403, code: "ineligible-session" }, true);
+      expect(message).toContain("account");
+      expect(message).not.toContain("code is invalid");
+      expect(authMessage({ status: 403 }, true)).toContain("code is invalid");
+    } finally {
+      queries.clear();
     }
   });
   it("restores through refresh and clears private queries on identity/role changes, but not token rotation", async () => {
