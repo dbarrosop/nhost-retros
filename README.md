@@ -116,6 +116,28 @@ reset Docker, database volumes, migrations or metadata. Explicit signup/sign-in
 naturally writes Auth accounts/sessions on the configured backend. Integration commands
 below provision a **separate disposable project**; never reset `backend-*`.
 
+## Nhost as an OIDC provider
+
+`/oauth2/login` is the consent page for Nhost's OAuth2 provider. Set
+`auth.oauth2Provider.loginURL` to this page's absolute URL on the same frontend
+that uses your Nhost project (locally, `http://localhost:5173/oauth2/login`).
+Register OAuth2 clients and enable the provider in Nhost before using the flow.
+For production, configure the deployed URL in the project's settings as well.
+
+Start sign-in from the third-party application, not this page directly. Nhost
+redirects here with `request_id`; the page retrieves the validated client ID,
+callback and scopes from Auth. Existing sessions are reused; otherwise the normal
+email-code form signs in without losing the request. Signing in never grants
+access automatically: the user must choose **Allow access** before the page posts
+consent with their Nhost access token and follows Auth's returned callback.
+Only HTTP(S) callbacks are supported. The frontend never exchanges codes or
+handles a client secret.
+
+**Cancel** grants nothing and stays on this site. The current Nhost login API has
+no denial endpoint or state-bearing rejection response, so the page does not
+fabricate a callback; close it and return to the application. Expired, completed
+or invalid requests must be restarted from the third-party application.
+
 ## Deploy frontend to Cloudflare Workers
 
 The default `nix develop` shell includes Wrangler. Run from the repository root:
