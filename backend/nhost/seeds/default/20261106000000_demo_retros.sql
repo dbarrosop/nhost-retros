@@ -23,7 +23,7 @@ BEGIN
   -- Keep the global signup roles user/me. The facilitator grant below is trusted
   -- seed SQL, never a signup-requestable role or a metadata claim.
   FOR account IN SELECT * FROM (VALUES
-    ('acde0000-0000-4000-8000-000000000001'::uuid, 'factilitator@acme.local', 'Demo Facilitator'),
+    ('acde0000-0000-4000-8000-000000000001'::uuid, 'facilitator@acme.local', 'Demo Facilitator'),
     ('acde0000-0000-4000-8000-000000000002'::uuid, 'avery@acme.local', 'Avery Morgan'),
     ('acde0000-0000-4000-8000-000000000003'::uuid, 'jordan@acme.local', 'Jordan Lee'),
     ('acde0000-0000-4000-8000-000000000004'::uuid, 'samira@acme.local', 'Samira Patel'),

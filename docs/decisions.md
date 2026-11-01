@@ -518,8 +518,8 @@
   only fictional local data: one explicitly granted facilitator, eight ordinary
   participants, active/ended retrospectives and question boards with both grouped
   and ungrouped responses. Auth users have the ordinary `user` default and no
-  password; local OTP/Mailhog remains the login path. The requested address is
-  intentionally `factilitator@acme.local`. Global signup roles remain `user,me`.
+  password; local OTP/Mailhog remains the login path. The facilitator address is
+  `facilitator@acme.local`. Global signup roles remain `user,me`.
 - **Preserve edits and closure on replay.** Stable IDs and insert-only existence
   checks make the seed repeatable without bypassing closure triggers. Accounts
   receive memberships only when newly created; rerunning cannot restore a revoked

@@ -12,16 +12,10 @@ configuration:
     user_id: userId
   custom_name: retroSessionParticipants
   custom_root_fields:
-    select: retroSessionParticipants
-    insert: insertRetroSessionParticipants
     delete: deleteRetroSessionParticipants
+    insert: insertRetroSessionParticipants
+    select: retroSessionParticipants
 object_relationships:
-  - name: session
-    using:
-      foreign_key_constraint_on: session_id
-  - name: user
-    using:
-      foreign_key_constraint_on: user_id
   - name: account
     using:
       manual_configuration:
@@ -31,12 +25,15 @@ object_relationships:
         remote_table:
           name: retro_participant_accounts
           schema: public
+  - name: session
+    using:
+      foreign_key_constraint_on: session_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
 insert_permissions:
   - role: facilitator
     permission:
-      columns:
-        - session_id
-        - user_id
       check:
         _and:
           - _exists:
@@ -49,6 +46,9 @@ insert_permissions:
                 is_facilitator:
                   _eq: true
           - account: {}
+      columns:
+        - session_id
+        - user_id
 select_permissions:
   - role: facilitator
     permission:

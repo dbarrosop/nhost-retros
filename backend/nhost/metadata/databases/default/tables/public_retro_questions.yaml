@@ -98,7 +98,6 @@ select_permissions:
               _where:
                 id:
                   _eq: X-Hasura-User-Id
-
 update_permissions:
   - role: facilitator
     permission:

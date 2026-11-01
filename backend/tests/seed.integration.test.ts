@@ -97,7 +97,7 @@ describe("local retrospective demo seed", () => {
           .sort(),
       ).toEqual(user.id === id(0, 1) ? ["facilitator", "me", "user"] : ["me", "user"]);
     }
-    expect(data.users.find((user) => user.id === id(0, 1))?.email).toBe("factilitator@acme.local");
+    expect(data.users.find((user) => user.id === id(0, 1))?.email).toBe("facilitator@acme.local");
     expect(
       (
         await db.query(

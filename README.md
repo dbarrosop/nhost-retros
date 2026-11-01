@@ -82,7 +82,7 @@ started by setup.
 
 `backend/nhost/seeds/default/20261106000000_demo_retros.sql` creates:
 
-- `factilitator@acme.local` with trusted facilitator membership (spelling intentional).
+- `facilitator@acme.local` with trusted facilitator membership.
 - Eight fictional participants: `avery`, `jordan`, `samira`, `diego`, `mei`, `noah`,
   `imani` and `luca`, all at `@acme.local`.
 - Three retrospectives (two active, one ended), with all nine demo accounts enrolled
