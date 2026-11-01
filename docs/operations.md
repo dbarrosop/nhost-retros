@@ -296,7 +296,8 @@ with an old JWT. Changing the email domain alone does not revoke access.
 
 `20261107000000_retro_participants` adds a session/account membership table and a
 facilitator-only minimal directory of verified, eligible accounts. Apply the new
-migration and current metadata together using the existing backend-first workflow
+migration and current metadata together using the
+[backend-first rollout and pre-publish checks](#static-host-and-backend-first-rollout)
 (and refresh Constellation) before releasing the frontend. **There is no backfill:**
 all existing sessions initially have no participants, even if they have responses.
 A trusted facilitator must open each session and use **Participants → Add participant**.
@@ -657,14 +658,35 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    cannot target production. Recreate/reload Constellation's metadata snapshot as
    required by its pinned version; Hasura metadata success alone is insufficient.
 3. Before publishing the new frontend, verify both role schemas and real-JWT
-   controls: eligible participant reads, two-user private multi-card isolation,
-   denied forged facilitator header and live revoked membership, closure rejecting
-   later content writes, and facilitator-only grouping after closure. Use approved
-   synthetic accounts/data: ended smoke-test content is intentionally retained.
-   Never log JWTs, OTPs or admin responses.
-4. Publish the static frontend with the approved public URLs. Smoke-test HTTPS
-   OTP delivery/verification, restoration/signout, two-browser five-second updates,
-   mobile/keyboard Move-to, closed-session read-only state and deep-link fallback.
+   controls on **both Hasura and Constellation**. Use approved synthetic accounts/data
+   and a trusted smoke facilitator provisioned through approved SQL (see step 5).
+   Before allowed-access checks, enroll synthetic participants in the smoke session
+   with the facilitator-role `insertRetroSessionParticipants` mutation or approved
+   SQL; the new **Participants** UI is not published yet. Keep a separate eligible
+   account unenrolled for denial checks.
+
+   - An enrolled participant can read the session and its questions (directly and
+     through nested relationships), read only their own cards, and insert/edit/delete
+     their own cards while the session is active.
+   - An eligible but non-enrolled account cannot read that session, its questions or
+     own cards, or insert answers. Membership in a different session grants no access.
+   - Remove an enrolled author and reuse their already-issued JWT: session, question
+     and own-card reads must lose access, and answer inserts/updates/deletes must be
+     denied. Their retained responses must remain visible to facilitators, whose
+     global management/board access does not require session enrollment.
+   - Also verify two-user private multi-card isolation, denied forged facilitator
+     headers and live **facilitator-role** revocation, closure rejecting later content
+     writes, and facilitator-only grouping after closure.
+
+   Ended smoke-test content is intentionally retained. Never log JWTs, OTPs or admin
+   responses.
+4. Publish the static frontend with the approved public URLs. Re-enroll synthetic
+   smoke participants as needed, then smoke-test HTTPS OTP delivery/verification,
+   restoration/signout, two-browser five-second updates, mobile/keyboard Move-to,
+   closed-session read-only state and deep-link fallback. Exercise facilitator
+   **Participants** add/remove controls and the response-board author filter,
+   including retained authors after removal. Verify facilitators must enroll
+   themselves before answering through the ordinary participant route.
    Inspect browser requests for the expected explicit role and canonical endpoint.
    Stop onboarding on failed authorization or freeze checks; do not mask them by
    switching engines or loosening permissions.
