@@ -132,7 +132,7 @@ describe("email OTP forms", () => {
     for (const address of [
       "outside@sub.nhost.io",
       "person@example.com",
-      "factilitator@acme.local",
+      "facilitator@acme.local",
     ]) {
       await user.clear(email);
       await user.type(email, address);

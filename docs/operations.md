@@ -173,7 +173,7 @@ grant; use **Facilitator workspace**. Revocation affects old JWTs immediately at
 the data layer. The additive helper does not create accounts or grants. First
 local Nhost startup also applies the checked-in demo seed; on an existing stack,
 add `--apply-seeds` to the usual startup command without changing its project,
-subdomain or port flags. The seed provisions `factilitator@acme.local` as a trusted
+subdomain or port flags. The seed provisions `facilitator@acme.local` as a trusted
 facilitator plus fictional participants and example retrospectives. It is for
 local development only; see [the seed instructions](../README.md#local-demo-seed).
 Never apply demo users/grants to production.
@@ -289,8 +289,36 @@ triggers and the live eligibility view. `user` and trusted `facilitator` JWTs no
 have explicit app read schemas on both engines; only facilitators have management
 mutations. Internal `me` still has no app schema (Hasura's empty-role stub versus
 Constellation's missing-role response). No role can select the eligibility view
-or an Auth directory. Live SQL membership revocation denies facilitator data even
-with an old JWT. Changing the email domain alone does not revoke access.
+or the Auth users table. Facilitators can select the minimal eligible-account
+directory described under [Explicit session participants](#explicit-session-participants).
+Live SQL membership revocation denies facilitator data even with an old JWT.
+Changing the email domain alone does not revoke access.
+
+### Explicit session participants
+
+`20261107000000_retro_participants` adds a session/account membership table and a
+facilitator-only minimal directory of verified, eligible accounts. Apply the new
+migration and current metadata together using the
+[backend-first rollout and pre-publish checks](#static-host-and-backend-first-rollout)
+(and refresh Constellation) before releasing the frontend. **There is no backfill:**
+all existing sessions initially have no participants, even if they have responses.
+A trusted facilitator must open each session and use **Participants → Add participant**.
+Accounts must first sign up and verify their email; this does not send invitations.
+Facilitators retain global management/board access, but must add themselves before
+using the ordinary participant route to answer.
+
+User-role session/question reads and all own-answer reads/writes require live
+session membership in addition to account eligibility. Removal preserves responses
+and grouping but revokes participant access, including with existing JWTs. Answer
+triggers lock membership rows so stale concurrent writes fail if removal commits
+first. Membership can change after ending, but content remains permanently frozen.
+The response-board filter includes retained authors even after removal.
+
+Use the scratch migration roundtrip for down/up verification. Never apply down SQL
+to a live backend: removing this membership boundary requires coordinated older
+metadata/application deployment and would restore the old broader read policy.
+The local demo seed enrolls accounts only for newly created demo sessions; rerunning
+it does not enroll pre-existing sessions or restore removed memberships.
 
 ## Auth fixture and rate budgets
 
@@ -456,7 +484,10 @@ touch only the separately registered disposable database, never the developer st
 
 ## Session lifecycle and acceptance fixtures
 
-Eligible accounts can browse every active and ended session and its questions.
+Eligible participants can browse only the active and ended sessions they are
+currently enrolled in and those sessions' questions; eligibility alone grants no
+session or question access. Trusted facilitators retain management access to every
+session (see [Explicit session participants](#explicit-session-participants)).
 Only trusted facilitators manage content. End confirmation is irreversible: a
 closed session cannot be renamed, reopened or deleted, and its questions cannot
 be added/edited/deleted. Answer cards also become immutable. Database triggers lock
@@ -484,10 +515,12 @@ and metadata independently and checks desktop/mobile management and read-only
 participant flows, including multiple private cards, cross-tab closure and draft
 retention. Participant card reads omit author IDs; facilitators may read all cards
 and author IDs but cannot edit/delete others’ content. For their own participation,
-facilitators follow the session’s participant link, which sends the ordinary user
-role. The facilitator API additionally exposes only retained-answer authors'
-IDs, display names and emails; participants cannot select or filter by this
-projection or grouping relationships.
+facilitators must first add themselves under **Participants**, then follow the
+session’s participant link, which sends the ordinary user role. The facilitator
+API additionally exposes IDs, display names and emails through `retroAnswerAuthors`
+for retained-answer authors and `retroParticipantAccounts` for every verified,
+eligible account, used for enrollment whether or not it has answered. Participants
+cannot select or filter by either projection or grouping relationships.
 
 ### Facilitator grouping API
 
@@ -632,14 +665,35 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    cannot target production. Recreate/reload Constellation's metadata snapshot as
    required by its pinned version; Hasura metadata success alone is insufficient.
 3. Before publishing the new frontend, verify both role schemas and real-JWT
-   controls: eligible participant reads, two-user private multi-card isolation,
-   denied forged facilitator header and live revoked membership, closure rejecting
-   later content writes, and facilitator-only grouping after closure. Use approved
-   synthetic accounts/data: ended smoke-test content is intentionally retained.
-   Never log JWTs, OTPs or admin responses.
-4. Publish the static frontend with the approved public URLs. Smoke-test HTTPS
-   OTP delivery/verification, restoration/signout, two-browser five-second updates,
-   mobile/keyboard Move-to, closed-session read-only state and deep-link fallback.
+   controls on **both Hasura and Constellation**. Use approved synthetic accounts/data
+   and a trusted smoke facilitator provisioned through approved SQL (see step 5).
+   Before allowed-access checks, enroll synthetic participants in the smoke session
+   with the facilitator-role `insertRetroSessionParticipants` mutation or approved
+   SQL; the new **Participants** UI is not published yet. Keep a separate eligible
+   account unenrolled for denial checks.
+
+   - An enrolled participant can read the session and its questions (directly and
+     through nested relationships), read only their own cards, and insert/edit/delete
+     their own cards while the session is active.
+   - An eligible but non-enrolled account cannot read that session, its questions or
+     own cards, or insert answers. Membership in a different session grants no access.
+   - Remove an enrolled author and reuse their already-issued JWT: session, question
+     and own-card reads must lose access, and answer inserts/updates/deletes must be
+     denied. Their retained responses must remain visible to facilitators, whose
+     global management/board access does not require session enrollment.
+   - Also verify two-user private multi-card isolation, denied forged facilitator
+     headers and live **facilitator-role** revocation, closure rejecting later content
+     writes, and facilitator-only grouping after closure.
+
+   Ended smoke-test content is intentionally retained. Never log JWTs, OTPs or admin
+   responses.
+4. Publish the static frontend with the approved public URLs. Re-enroll synthetic
+   smoke participants as needed, then smoke-test HTTPS OTP delivery/verification,
+   restoration/signout, two-browser five-second updates, mobile/keyboard Move-to,
+   closed-session read-only state and deep-link fallback. Exercise facilitator
+   **Participants** add/remove controls and the response-board author filter,
+   including retained authors after removal. Verify facilitators must enroll
+   themselves before answering through the ordinary participant route.
    Inspect browser requests for the expected explicit role and canonical endpoint.
    Stop onboarding on failed authorization or freeze checks; do not mask them by
    switching engines or loosening permissions.

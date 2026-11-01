@@ -518,8 +518,8 @@
   only fictional local data: one explicitly granted facilitator, eight ordinary
   participants, active/ended retrospectives and question boards with both grouped
   and ungrouped responses. Auth users have the ordinary `user` default and no
-  password; local OTP/Mailhog remains the login path. The requested address is
-  intentionally `factilitator@acme.local`. Global signup roles remain `user,me`.
+  password; local OTP/Mailhog remains the login path. The facilitator address is
+  `facilitator@acme.local`. Global signup roles remain `user,me`.
 - **Preserve edits and closure on replay.** Stable IDs and insert-only existence
   checks make the seed repeatable without bypassing closure triggers. Accounts
   receive memberships only when newly created; rerunning cannot restore a revoked
@@ -528,3 +528,28 @@
 - **Validate without touching developer data.** Seed tests use rolled-back
   transactions on the registered disposable database to check counts, eligibility,
   relationships, replay preservation, frozen content and collision rollback.
+
+## Explicit session participants
+
+- **Facilitator-managed enrollment, not automatic access.** A composite-key
+  session/user membership references existing Auth accounts. Only live eligible
+  facilitators may insert/delete it; targets must be verified and eligible.
+  A facilitator-only ID/name/email projection supports account selection without
+  granting an Auth directory or exposing it to participants. Existing sessions
+  receive no migration backfill, including sessions with retained responses.
+- **Membership is enforced at every participant entrypoint.** User-role session,
+  question and own-answer reads (including nested/by-PK paths) require enrollment.
+  Answer insert/update/delete checks also require membership and the existing
+  eligibility/ownership/active-session predicates. A database trigger locks the
+  author's membership row, serializing writes against removal independently of a
+  stale GraphQL permission snapshot. Facilitators retain global management reads,
+  but enroll explicitly to answer with the ordinary user role.
+- **Removal is revocation, not erasure.** Responses and their author projections
+  survive removal. Enrollment stays editable after ending, without changing the
+  content freeze. The facilitator board filters displayed cards/counts by author
+  across all topics, includes former participants with retained responses, and
+  keeps card numbering/grouping IDs stable. Columns with hidden cards show visible
+  and total counts, and a hidden-only column explains the filter instead of claiming
+  the topic or Ungrouped is empty. Topic deletion stays available and its confirmation
+  counts all cards that will move, not just visible cards. The filter cannot change
+  mid-drag or during a pending grouping write.

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
 import { readFailed, useRetroQuery } from "../../lib/retro-api";
 import { ConfirmAction, TextForm, useChange } from "../sessions/controls";
@@ -109,9 +110,38 @@ function AnswerCard({
   const label = `card ${number} for question ${questionNumber}`;
   return (
     <article className="answer-card" aria-labelledby={`card-${answer.id}`}>
-      <h5 ref={heading} id={`card-${answer.id}`} tabIndex={-1}>
-        Card {number}
-      </h5>
+      <header className="title-row answer-card-header">
+        <h5 ref={heading} id={`card-${answer.id}`} tabIndex={-1}>
+          Card {number}
+        </h5>
+        {!locked && (
+          <fieldset className="title-actions" aria-label={`Actions for ${label}`}>
+            {!editing && (
+              <IconButton
+                label={`Edit ${label}`}
+                icon="edit"
+                disabled={change.isPending}
+                onClick={() => setEditing(true)}
+              />
+            )}
+            <ConfirmAction
+              label={`Delete ${label}`}
+              icon="delete"
+              title="Delete your card?"
+              description="This removes only this card. Your other reflections are kept. This cannot be undone."
+              disabled={change.isPending}
+              onConfirm={async () => {
+                await change.mutateAsync({
+                  query: deleteAnswer,
+                  variables: { id: answer.id },
+                  field: "deleteRetroAnswers",
+                });
+              }}
+              afterConfirm={onDeleted}
+            />
+          </fieldset>
+        )}
+      </header>
       <p className="answer-text">{answer.text}</p>
       {editing && (
         <TextForm
@@ -121,6 +151,7 @@ function AnswerCard({
           multiline
           maximum={4000}
           submit="Save card"
+          focusOnMount
           disabled={locked}
           onCancel={() => {
             setEditing(false);
@@ -136,29 +167,6 @@ function AnswerCard({
             heading.current?.focus();
           }}
         />
-      )}
-      {!locked && (
-        <div className="action-row">
-          {!editing && (
-            <button className="secondary-button" type="button" onClick={() => setEditing(true)}>
-              Edit {label}
-            </button>
-          )}
-          <ConfirmAction
-            label={`Delete ${label}`}
-            title="Delete your card?"
-            description="This removes only this card. Your other reflections are kept. This cannot be undone."
-            disabled={change.isPending}
-            onConfirm={async () => {
-              await change.mutateAsync({
-                query: deleteAnswer,
-                variables: { id: answer.id },
-                field: "deleteRetroAnswers",
-              });
-            }}
-            afterConfirm={onDeleted}
-          />
-        </div>
       )}
     </article>
   );

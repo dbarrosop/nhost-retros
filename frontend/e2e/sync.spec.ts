@@ -62,6 +62,11 @@ test("independent browsers synchronize cards, grouping and closure; old requests
         [sessionId],
       )
     ).rows[0].id;
+    for (const userId of [alice.id, bob.id])
+      await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+        sessionId,
+        userId,
+      ]);
     for (const [ctx, fixture] of [
       [context, alice],
       [firstContext, first],

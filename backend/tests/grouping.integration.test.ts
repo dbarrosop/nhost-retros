@@ -48,6 +48,10 @@ async function seed(db: Client, author: string) {
       [session],
     )
   ).rows[0].id as string;
+  await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+    session,
+    author,
+  ]);
   const answer = (
     await db.query(
       "INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,'Original private reflection') RETURNING id",

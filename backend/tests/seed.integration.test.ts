@@ -41,6 +41,11 @@ async function snapshot() {
         "SELECT * FROM retro_sessions WHERE id::text LIKE 'acde1000-0000-4000-8000-%' ORDER BY id",
       )
     ).rows,
+    participants: (
+      await db.query(
+        "SELECT * FROM retro_session_participants WHERE session_id::text LIKE 'acde1000-0000-4000-8000-%' ORDER BY session_id,user_id",
+      )
+    ).rows,
     questions: (
       await db.query(
         "SELECT * FROM retro_questions WHERE id::text LIKE 'acde2000-0000-4000-8000-%' ORDER BY id",
@@ -71,6 +76,7 @@ describe("local retrospective demo seed", () => {
     expect(data.users).toHaveLength(9);
     expect(data.roles).toHaveLength(19);
     expect(data.sessions).toHaveLength(3);
+    expect(data.participants).toHaveLength(27);
     expect(data.questions).toHaveLength(9);
     expect(data.answers).toHaveLength(72);
     expect(data.topics).toHaveLength(19);
@@ -91,7 +97,7 @@ describe("local retrospective demo seed", () => {
           .sort(),
       ).toEqual(user.id === id(0, 1) ? ["facilitator", "me", "user"] : ["me", "user"]);
     }
-    expect(data.users.find((user) => user.id === id(0, 1))?.email).toBe("factilitator@acme.local");
+    expect(data.users.find((user) => user.id === id(0, 1))?.email).toBe("facilitator@acme.local");
     expect(
       (
         await db.query(
@@ -146,9 +152,33 @@ describe("local retrospective demo seed", () => {
     await db.query("DELETE FROM auth.user_roles WHERE user_id=$1 AND role='facilitator'", [
       id(0, 1),
     ]);
+    await db.query("DELETE FROM retro_session_participants WHERE session_id=$1 AND user_id=$2", [
+      id(1, 1),
+      id(0, 2),
+    ]);
     const edited = await snapshot();
     await db.query(seed);
     expect(await snapshot()).toEqual(edited);
+  });
+
+  it("restores missing cards only for authors still enrolled in the session", async () => {
+    await db.query(seed);
+    const initial = await snapshot();
+    await db.query("DELETE FROM retro_answers WHERE id IN ($1,$2)", [id(3, 25), id(3, 26)]);
+    await db.query("DELETE FROM retro_session_participants WHERE session_id=$1 AND user_id=$2", [
+      id(1, 2),
+      id(0, 2),
+    ]);
+
+    await db.query(seed);
+    expect(await snapshot()).toEqual({
+      ...initial,
+      participants: initial.participants.filter(
+        (participant) => participant.session_id !== id(1, 2) || participant.user_id !== id(0, 2),
+      ),
+      answers: initial.answers.filter((answer) => answer.id !== id(3, 25)),
+      assignments: initial.assignments.filter((assignment) => assignment.answer_id !== id(3, 25)),
+    });
   });
 
   it("fails atomically if a demo account ID belongs to another email", async () => {

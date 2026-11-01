@@ -56,6 +56,11 @@ test("trusted facilitators cluster accessibly, including after closure, without 
         [sessionId],
       )
     ).rows[0].id;
+    for (const userId of [alice.id])
+      await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+        sessionId,
+        userId,
+      ]);
     const answerId = (
       await db.query(
         "INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,'More room for focused work') RETURNING id",
@@ -105,6 +110,15 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       page.getByRole("heading", { level: 1, name: "What should we make space for?" }),
     ).toBeVisible();
     await expect(page.getByText(alice.email, { exact: true })).toBeVisible();
+    const aliceChip = page.getByRole("button", { name: `Alice (${alice.email})`, exact: true });
+    await expect(aliceChip).toHaveAttribute("aria-pressed", "true");
+    await aliceChip.click();
+    await expect(page.getByRole("article")).toHaveCount(1);
+    await aliceChip.click({ modifiers: ["Shift"] });
+    await expect(page.getByRole("article")).toHaveCount(0);
+    await expect(aliceChip).toHaveAttribute("aria-pressed", "false");
+    await aliceChip.click();
+    await expect(page.getByRole("article")).toHaveCount(1);
     for (const name of ["Keep", "Improve"]) {
       await page.getByLabel("New topic", { exact: true }).fill(name);
       await page.getByRole("button", { name: "Add topic", exact: true }).click();
@@ -257,6 +271,13 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       .getByRole("button", { name: "End session", exact: true })
       .click();
     await expect(page.getByText(/permanently read-only/)).toBeVisible();
+    // Long participant emails must wrap, not enlarge the mobile layout viewport.
+    await expect(page.getByRole("button", { name: `Remove ${alice.email}` })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
     await page.getByRole("link", { name: "Open reflection board for question 1" }).click();
     await expect(page.getByText(/topics and grouping remain open/)).toBeVisible();
     await expect(
@@ -284,6 +305,10 @@ test("trusted facilitators cluster accessibly, including after closure, without 
         [longSession],
       )
     ).rows[0].id;
+    await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+      longSession,
+      alice.id,
+    ]);
     await db.query("INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,$3)", [
       longQuestion,
       alice.id,
@@ -307,9 +332,11 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     await page.keyboard.press("Space");
     await expect(select()).toHaveValue(longTopic);
     await expect(handle()).toBeFocused();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-      true,
-    );
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
     const axe = await new AxeBuilder({ page }).analyze();
     expect(axe.violations.filter((v) => ["serious", "critical"].includes(v.impact ?? ""))).toEqual(
       [],

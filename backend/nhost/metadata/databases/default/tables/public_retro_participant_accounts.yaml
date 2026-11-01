@@ -1,0 +1,29 @@
+table:
+  name: retro_participant_accounts
+  schema: public
+configuration:
+  column_config:
+    display_name:
+      custom_name: displayName
+  custom_column_names:
+    display_name: displayName
+  custom_name: retroParticipantAccounts
+  custom_root_fields:
+    select: retroParticipantAccounts
+select_permissions:
+  - role: facilitator
+    permission:
+      columns:
+        - id
+        - display_name
+        - email
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true

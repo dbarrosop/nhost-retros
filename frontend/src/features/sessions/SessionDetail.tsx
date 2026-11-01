@@ -1,11 +1,13 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
 import { type AppRole, readFailed } from "../../lib/retro-api";
 import { Questions } from "../questions/Questions";
 import { useSession } from "./api";
 import { ConfirmAction, TextForm, useChange } from "./controls";
 import { deleteSession, endSession, renameSession } from "./facilitator-api";
+import { Participants } from "./Participants";
 
 export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
   const query = useSession(role, id);
@@ -14,6 +16,10 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
   const drafts = useDrafts();
   const [renaming, setRenaming] = useState(() => drafts?.has("Rename session") ?? false);
   const session = query.data?.retroSessions[0];
+  const finishRename = () => {
+    setRenaming(false);
+    document.getElementById("session-title")?.focus();
+  };
   return (
     <>
       <Link className="quiet-link" to={role === "facilitator" ? "/facilitate" : "/workspace"}>
@@ -38,13 +44,59 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             <span className={`session-status ${session.ended ? "ended" : ""}`}>
               {session.ended ? "Ended" : "Active"}
             </span>
-            <h1 id="session-title" tabIndex={-1}>
-              {session.name}
-            </h1>
+            <div className="title-row session-title-row">
+              <h1 id="session-title" tabIndex={-1}>
+                {session.name}
+              </h1>
+              {role === "facilitator" && !session.ended && !query.isError && (
+                <fieldset className="title-actions" aria-label="Session actions">
+                  {!renaming && (
+                    <IconButton
+                      label="Rename session"
+                      icon="edit"
+                      disabled={change.isPending}
+                      onClick={() => setRenaming(true)}
+                    />
+                  )}
+                  <ConfirmAction
+                    label="End session"
+                    icon="end"
+                    title="End this retrospective?"
+                    description="Ending is permanent. The session name, questions and answer cards will be frozen, including changes from other open tabs. You cannot reopen it."
+                    disabled={change.isPending}
+                    onConfirm={async () => {
+                      await change.mutateAsync({
+                        query: endSession,
+                        variables: { id },
+                        field: "updateRetroSessions",
+                      });
+                    }}
+                    afterConfirm={() => document.getElementById("session-title")?.focus()}
+                  />
+                  {session.questions.length === 0 && (
+                    <ConfirmAction
+                      label="Delete session"
+                      icon="delete"
+                      title="Delete this empty session?"
+                      description="Only an active session with no questions can be deleted. This cannot be undone."
+                      disabled={change.isPending}
+                      onConfirm={async () => {
+                        await change.mutateAsync({
+                          query: deleteSession,
+                          variables: { id },
+                          field: "deleteRetroSessions",
+                        });
+                        await navigate({ to: "/facilitate" });
+                      }}
+                    />
+                  )}
+                </fieldset>
+              )}
+            </div>
             <p className="hero-description">
               {session.ended
                 ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only."
-                : "Take a moment to look back. These questions are shared with everyone on the team."}
+                : "Take a moment to look back. These questions are shared with this session’s participants."}
             </p>
           </div>
           {renaming && (
@@ -54,69 +106,31 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
                 maximum={120}
                 initial={session.name}
                 submit="Save name"
+                focusOnMount
                 disabled={session.ended || query.isError}
-                onCancel={() => setRenaming(false)}
+                onCancel={finishRename}
                 onSave={async (name) => {
                   await change.mutateAsync({
                     query: renameSession,
                     variables: { id, name },
                     field: "updateRetroSessions",
                   });
-                  setRenaming(false);
+                  finishRename();
                 }}
               />
-            </div>
-          )}
-          {role === "facilitator" && !session.ended && !query.isError && (
-            <div className="session-actions action-row">
-              {!renaming && (
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => setRenaming(true)}
-                >
-                  Rename session
-                </button>
-              )}
-              <ConfirmAction
-                label="End session"
-                title="End this retrospective?"
-                description="Ending is permanent. The session name, questions and answer cards will be frozen, including changes from other open tabs. You cannot reopen it."
-                disabled={change.isPending}
-                onConfirm={async () => {
-                  await change.mutateAsync({
-                    query: endSession,
-                    variables: { id },
-                    field: "updateRetroSessions",
-                  });
-                }}
-                afterConfirm={() => document.getElementById("session-title")?.focus()}
-              />
-              {session.questions.length === 0 && (
-                <ConfirmAction
-                  label="Delete session"
-                  title="Delete this empty session?"
-                  description="Only an active session with no questions can be deleted. This cannot be undone."
-                  disabled={change.isPending}
-                  onConfirm={async () => {
-                    await change.mutateAsync({
-                      query: deleteSession,
-                      variables: { id },
-                      field: "deleteRetroSessions",
-                    });
-                    await navigate({ to: "/facilitate" });
-                  }}
-                />
-              )}
             </div>
           )}
           {role === "facilitator" && (
             <p>
               <Link className="quiet-link" to="/sessions/$sessionId" params={{ sessionId: id }}>
                 View and write your own reflection cards →
-              </Link>
+              </Link>{" "}
+              <span className="field-hint">
+                Add yourself as a participant below to use this view.
+              </span>
             </p>
           )}
+          {role === "facilitator" && <Participants sessionId={id} />}
           <Questions
             questions={session.questions}
             sessionId={id}

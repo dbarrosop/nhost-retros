@@ -106,7 +106,18 @@ describe("private reflection cards", () => {
       questionId: "question",
       text: "First thought",
     });
-    await user.click(screen.getByRole("button", { name: "Edit card 1 for question 1" }));
+    const firstCard = screen.getByRole("article", { name: "Card 1" });
+    const actions = within(firstCard).getByRole("group", {
+      name: "Actions for card 1 for question 1",
+    });
+    expect(actions.parentElement).toContainElement(
+      within(firstCard).getByRole("heading", { name: "Card 1" }),
+    );
+    const edit = within(actions).getByRole("button", { name: "Edit card 1 for question 1" });
+    expect(edit).toHaveAttribute("title", "Edit card 1 for question 1");
+    expect(within(edit).getByText("Edit card 1 for question 1")).toHaveClass("sr-only");
+    await user.click(edit);
+    expect(screen.getByLabelText("Edit card 1 for question 1", { exact: true })).toHaveFocus();
     await user.clear(screen.getByLabelText("Edit card 1 for question 1", { exact: true }));
     await user.type(
       screen.getByLabelText("Edit card 1 for question 1", { exact: true }),
@@ -114,6 +125,9 @@ describe("private reflection cards", () => {
     );
     await user.click(screen.getByRole("button", { name: "Save card" }));
     expect(await screen.findByText("Revised thought")).toBeVisible();
+    await waitFor(() =>
+      expect(within(firstCard).getByRole("heading", { name: "Card 1" })).toHaveFocus(),
+    );
     expect(app.requests.find((r) => r.query.includes("mutation EditAnswer"))?.variables).toEqual({
       id: "a1",
       text: "Revised thought",

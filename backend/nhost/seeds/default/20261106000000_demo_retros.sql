@@ -1,7 +1,9 @@
 -- Development-only demo data. Nhost applies this on first local startup or
 -- with `nhost up --apply-seeds`. Do not apply demo accounts to production.
 -- Replays add missing rows without resetting data, overwriting cards or moving
--- existing assignments. Roles are granted only when a demo account is created.
+-- existing assignments. Missing cards are restored only for currently enrolled
+-- authors; removed memberships are never restored.
+-- Roles are granted only when a demo account is created.
 -- No passwords, JWTs, shared credentials or disabled database triggers.
 DO $seed$
 DECLARE
@@ -21,7 +23,7 @@ BEGIN
   -- Keep the global signup roles user/me. The facilitator grant below is trusted
   -- seed SQL, never a signup-requestable role or a metadata claim.
   FOR account IN SELECT * FROM (VALUES
-    ('acde0000-0000-4000-8000-000000000001'::uuid, 'factilitator@acme.local', 'Demo Facilitator'),
+    ('acde0000-0000-4000-8000-000000000001'::uuid, 'facilitator@acme.local', 'Demo Facilitator'),
     ('acde0000-0000-4000-8000-000000000002'::uuid, 'avery@acme.local', 'Avery Morgan'),
     ('acde0000-0000-4000-8000-000000000003'::uuid, 'jordan@acme.local', 'Jordan Lee'),
     ('acde0000-0000-4000-8000-000000000004'::uuid, 'samira@acme.local', 'Samira Patel'),
@@ -48,6 +50,7 @@ BEGIN
   END LOOP;
 
   -- Sessions start active so all inserts obey the ordinary closure triggers.
+  WITH created_sessions AS (
   INSERT INTO public.retro_sessions(id, name, created_at)
   SELECT demo.id, demo.name, now()-make_interval(days => demo.age_days)
   FROM (VALUES
@@ -55,7 +58,14 @@ BEGIN
     ('acde1000-0000-4000-8000-000000000002'::uuid, 'Sprint 25 - Developer experience', 7),
     ('acde1000-0000-4000-8000-000000000003'::uuid, 'Platform launch - Next chapter', 1)
   ) AS demo(id, name, age_days)
-  WHERE NOT EXISTS (SELECT 1 FROM public.retro_sessions existing WHERE existing.id=demo.id);
+  WHERE NOT EXISTS (SELECT 1 FROM public.retro_sessions existing WHERE existing.id=demo.id)
+  RETURNING id
+  )
+  -- Enroll only when creating a demo session; replay never restores removals.
+  INSERT INTO public.retro_session_participants(session_id, user_id)
+  SELECT s.id, u.id FROM created_sessions s CROSS JOIN auth.users u
+  WHERE u.id BETWEEN 'acde0000-0000-4000-8000-000000000001'::uuid
+    AND 'acde0000-0000-4000-8000-000000000009'::uuid;
 
   INSERT INTO public.retro_questions(id, session_id, text, created_at)
   SELECT demo.id, demo.session_id, demo.text,
@@ -155,7 +165,9 @@ BEGIN
     ('acde3000-0000-4000-8000-000000000072'::uuid, 'acde2000-0000-4000-8000-000000000009'::uuid, 'acde0000-0000-4000-8000-000000000009'::uuid, 'Prepare a fallback plan for the external dependency.', 8)
   ) AS demo(id, question_id, author_id, text, position)
   JOIN public.retro_questions parent ON parent.id=demo.question_id
-  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answers existing WHERE existing.id=demo.id);
+  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answers existing WHERE existing.id=demo.id)
+    AND EXISTS (SELECT 1 FROM public.retro_session_participants p
+      WHERE p.session_id=parent.session_id AND p.user_id=demo.author_id);
 
   INSERT INTO public.retro_topics(id, question_id, name)
   SELECT demo.id, demo.question_id, demo.name FROM (VALUES
@@ -238,7 +250,8 @@ BEGIN
     ('acde3000-0000-4000-8000-000000000069'::uuid, 'acde2000-0000-4000-8000-000000000009'::uuid, 'acde4000-0000-4000-8000-000000000017'::uuid),
     ('acde3000-0000-4000-8000-000000000070'::uuid, 'acde2000-0000-4000-8000-000000000009'::uuid, 'acde4000-0000-4000-8000-000000000018'::uuid)
   ) AS demo(answer_id, question_id, topic_id)
-  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answer_topics existing WHERE existing.answer_id=demo.answer_id);
+  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answer_topics existing WHERE existing.answer_id=demo.answer_id)
+    AND EXISTS (SELECT 1 FROM public.retro_answers existing WHERE existing.id=demo.answer_id);
 
   -- Close one historical session only after its content is complete. Its cards
   -- remain frozen, while facilitator grouping continues to work as usual.
