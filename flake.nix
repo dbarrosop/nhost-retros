@@ -111,6 +111,7 @@
                 gnumake
                 nixpkgs-fmt
                 nhost.nhost-cli
+                wrangler
                 hasura-cli
                 skopeo
 

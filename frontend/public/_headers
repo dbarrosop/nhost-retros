@@ -1,0 +1,9 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Vite fingerprints everything in this directory. HTML keeps Cloudflare's
+# default Cache-Control: public, max-age=0, must-revalidate.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

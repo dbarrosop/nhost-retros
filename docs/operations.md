@@ -450,9 +450,9 @@ revocation still works after eligibility is lost. The command never changes the
 default role or accepts user metadata as authority. `facilitator` is not in the
 signup-requestable roles. Refresh/re-sign-in (or focus the existing SPA) to obtain
 new JWT claims. Use **Facilitator workspace** for session/question management;
-the default workspace remains participant-only. Production provisioning/deployment
-remains deferred. Tests touch only the separately registered disposable database,
-never the developer stack.
+the default workspace remains participant-only. Production backend provisioning
+and facilitator administration remain separate operator responsibilities. Tests
+touch only the separately registered disposable database, never the developer stack.
 
 ## Session lifecycle and acceptance fixtures
 
@@ -564,11 +564,16 @@ explicit, backed-up operator procedure, not trigger disabling in routine cleanup
   text field/button also blurs it in Chromium; pending forms keep controls
   focusable using read-only/aria-disabled plus a submit guard.
 
-## Production checklist (deferred; not a deployment command)
+## Production checklist (frontend deployment available)
 
-Local acceptance needs none of the following operator values. Deployment and
-production onboarding remain unperformed and blocked until the operator supplies
-and reviews them; never guess URLs or commit credentials.
+See [the frontend deployment instructions](../README.md#deploy-frontend-to-cloudflare-workers)
+for `make deploy-frontend`, the existing `nhost-app` dispatch namespace, and the
+`FRONTEND_DOMAIN` override (default `retros.nhost.app`). This target publishes only
+the frontend; it never changes backend configuration/data or shared infrastructure.
+
+Local acceptance needs none of the following operator values. Actual production
+deployment and onboarding remain unperformed until the operator supplies and
+reviews them; never guess backend URLs or commit credentials.
 
 ### Operator-supplied configuration
 
@@ -610,7 +615,11 @@ Do not enable unrelated Auth providers or storage permissions as part of rollout
 
 ### Static host and backend-first rollout
 
-1. Serve the Vite `frontend/dist` build over HTTPS. Rewrite application route GETs
+The checked-in Worker configuration implements the static-host behavior below:
+Cloudflare handles SPA navigations and existing assets before the 404 fallback,
+with immutable hashed assets and revalidated HTML. No API proxy is deployed.
+
+1. Serve the Vite `frontend/dist` build over HTTPS. Rewrite application navigations
    (for example `/sessions/<uuid>` and `/facilitate/<uuid>/questions/<uuid>`) to
    `index.html` with a successful status, while preserving real static assets and
    returning missing assets as errors. Do not rewrite API origins. Cache hashed

@@ -116,6 +116,62 @@ reset Docker, database volumes, migrations or metadata. Explicit signup/sign-in
 naturally writes Auth accounts/sessions on the configured backend. Integration commands
 below provision a **separate disposable project**; never reset `backend-*`.
 
+## Deploy frontend to Cloudflare Workers
+
+The default `nix develop` shell includes Wrangler. Run from the repository root:
+
+```sh
+nix develop
+pnpm install --frozen-lockfile
+wrangler login  # Or securely export CLOUDFLARE_API_TOKEN for automation.
+export CLOUDFLARE_ACCOUNT_ID='<production Cloudflare account ID>'
+export VITE_NHOST_SUBDOMAIN='<cloud Nhost project subdomain>'
+export VITE_NHOST_REGION='<cloud Nhost project region>'
+make deploy-frontend WRANGLER_DEPLOY_ARGS=--dry-run  # Build/package only; no upload.
+make deploy-frontend
+```
+
+This builds the SPA and deploys Worker `retros` with its static assets to the
+existing **`nhost-app` Workers for Platforms dispatch namespace**. The infra-managed
+wildcard DNS and dispatcher already send `https://retros.nhost.app` to that Worker;
+this app does not create DNS, routes, custom domains, or another dispatcher.
+The Cloudflare identity must be able to deploy scripts/assets to that namespace
+(account **Workers Scripts: Edit** permission); the namespace must already exist.
+
+Override the hostname through the environment or Make, for example:
+
+```sh
+FRONTEND_DOMAIN=retro-preview.nhost.app make deploy-frontend
+```
+
+Only a single lowercase `<name>.nhost.app` label is accepted, matching the existing
+dispatcher's routing. The Worker name is derived from that label, so the example
+publishes a separate `retro-preview` Worker. `CLOUDFLARE_DISPATCH_NAMESPACE` defaults
+to `nhost-app` and can be overridden for equivalent infrastructure elsewhere.
+Domains outside `nhost.app` need separate DNS/TLS and an infra `CUSTOM_DOMAINS` KV
+mapping to the Worker name; this target deliberately does not provision them.
+
+Export the public backend variables explicitly for deployment (the guard does not
+read Vite `.env*` files). Alternatively export **both** `VITE_NHOST_AUTH_URL` and
+`VITE_NHOST_GRAPHQL_URL` as HTTPS custom endpoints. Existing Vite overrides still
+take precedence: review them before building. All these values are baked into the
+browser bundle, **not** Worker secrets. Cloudflare credentials must never use a
+`VITE_` prefix. Deployment refuses implicit/local project defaults; normal local
+builds and preview remain unchanged.
+
+`frontend/wrangler.toml` serves SPA navigations (including direct deep-link reloads)
+through `index.html`. Unmatched non-navigation requests, such as missing JS/CSS,
+return 404 through the minimal Worker fallback. Fingerprinted `/assets/*` files
+cache immutably; HTML uses Cloudflare's default revalidation policy. Configure the
+production Nhost client URL/redirect allowlist and exact Auth/GraphQL CORS origins
+for `https://retros.nhost.app` (or your override) before onboarding.
+
+This target publishes only the frontend: it does not migrate/configure a production
+backend, seed accounts, grant facilitators, or provision SMTP. Follow the
+[production checklist](docs/operations.md#production-checklist-frontend-deployment-available)
+for backend-first rollout and smoke checks. Do not deploy the local backend config
+or demo seed to production.
+
 ## Checks
 
 ```sh
@@ -186,9 +242,9 @@ alone does not separate words in the computed accessible name checked by tests.
 
 ## Decisions
 
-See [docs/decisions.md](docs/decisions.md) for implementation choices. Production
-hosting/onboarding is deferred: it requires operator-supplied frontend URLs and
-custom SMTP configuration/capacity review. No production values are assumed here.
+See [docs/decisions.md](docs/decisions.md) for implementation choices. Frontend
+hosting is configured above; actual production rollout/onboarding still requires
+an approved backend and custom SMTP configuration/capacity review.
 [Operations](docs/operations.md) covers static-host fallback, backend-first rollout,
 backups, safe rollback and retained-account constraints; [local acceptance
 evidence](docs/acceptance.md) records the fresh disposable replay. CI runs isolated
