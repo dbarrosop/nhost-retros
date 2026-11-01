@@ -289,8 +289,10 @@ triggers and the live eligibility view. `user` and trusted `facilitator` JWTs no
 have explicit app read schemas on both engines; only facilitators have management
 mutations. Internal `me` still has no app schema (Hasura's empty-role stub versus
 Constellation's missing-role response). No role can select the eligibility view
-or an Auth directory. Live SQL membership revocation denies facilitator data even
-with an old JWT. Changing the email domain alone does not revoke access.
+or the Auth users table. Facilitators can select the minimal eligible-account
+directory described under [Explicit session participants](#explicit-session-participants).
+Live SQL membership revocation denies facilitator data even with an old JWT.
+Changing the email domain alone does not revoke access.
 
 ### Explicit session participants
 
@@ -515,9 +517,10 @@ retention. Participant card reads omit author IDs; facilitators may read all car
 and author IDs but cannot edit/delete others’ content. For their own participation,
 facilitators must first add themselves under **Participants**, then follow the
 session’s participant link, which sends the ordinary user role. The facilitator
-API additionally exposes only retained-answer authors'
-IDs, display names and emails; participants cannot select or filter by this
-projection or grouping relationships.
+API additionally exposes IDs, display names and emails through `retroAnswerAuthors`
+for retained-answer authors and `retroParticipantAccounts` for every verified,
+eligible account, used for enrollment whether or not it has answered. Participants
+cannot select or filter by either projection or grouping relationships.
 
 ### Facilitator grouping API
 
