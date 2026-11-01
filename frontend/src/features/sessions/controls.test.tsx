@@ -4,6 +4,26 @@ import { describe, expect, it, vi } from "vitest";
 import { ConfirmAction, TextForm } from "./controls";
 
 describe("keyboard-safe content controls", () => {
+  it("focuses an opened editor without stealing focus on later renders", async () => {
+    const user = userEvent.setup();
+    const props = {
+      label: "Edit question",
+      maximum: 500,
+      submit: "Save",
+      focusOnMount: true,
+      onSave: vi.fn().mockResolvedValue(undefined),
+    };
+    const view = render(<TextForm {...props} />);
+    const input = screen.getByLabelText("Edit question", { exact: true });
+    expect(input).toHaveFocus();
+    await user.type(input, "A clearer question");
+    await user.tab();
+    const submit = screen.getByRole("button", { name: "Save" });
+    expect(submit).toHaveFocus();
+    view.rerender(<TextForm {...props} />);
+    expect(submit).toHaveFocus();
+  });
+
   it.each([false, true])(
     "keeps submit focus and guards pending writes (failure: %s)",
     async (fails) => {
@@ -79,6 +99,7 @@ describe("keyboard-safe content controls", () => {
         label="Delete card"
         title="Delete your card?"
         description="This cannot be undone."
+        icon="delete"
         onConfirm={vi.fn().mockRejectedValue(new Error("test failure"))}
         afterConfirm={afterConfirm}
       />,

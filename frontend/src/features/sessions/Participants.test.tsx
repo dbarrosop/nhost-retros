@@ -117,7 +117,8 @@ describe("facilitator participant controls", () => {
     expect(screen.getAllByRole("option")).toHaveLength(1);
     await user.click(screen.getByRole("option", { name: /Alice Morgan/ }));
     const remove = await screen.findByRole("button", { name: "Remove alice@example.com" });
-    expect(remove).toHaveTextContent("");
+    expect(within(remove).getByText("Remove alice@example.com")).toHaveClass("sr-only");
+    expect(remove.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
     expect(remove).toHaveAttribute("title", "Remove alice@example.com");
     expect(
       within(screen.getByRole("list", { name: "Session participants" })).getByText("AM"),

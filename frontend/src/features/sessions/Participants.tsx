@@ -62,19 +62,7 @@ export function Participants({ sessionId }: { sessionId: string }) {
                   </div>
                   <ConfirmAction
                     label={`Remove ${account?.email || "participant"}`}
-                    icon={
-                      <svg
-                        viewBox="0 0 16 16"
-                        width="16"
-                        height="16"
-                        aria-hidden="true"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                      >
-                        <path d="m4 4 8 8M12 4l-8 8" />
-                      </svg>
-                    }
+                    icon="close"
                     title="Remove participant?"
                     description="They will lose access to this session and their cards. Their saved responses will remain visible to facilitators."
                     disabled={busy}

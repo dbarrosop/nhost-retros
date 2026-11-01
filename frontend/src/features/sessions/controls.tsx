@@ -1,5 +1,6 @@
 import { onlineManager, useMutation } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { type ActionIconName, IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
 import { type AppRole, changeFailed, requireAffected, useRetroApi } from "../../lib/retro-api";
 import { plainText } from "../../lib/text";
@@ -33,6 +34,7 @@ export function TextForm({
   submit,
   disabled = false,
   multiline = false,
+  focusOnMount = false,
   onSave,
   onCancel,
   onDirty,
@@ -46,6 +48,7 @@ export function TextForm({
   submit: string;
   disabled?: boolean;
   multiline?: boolean;
+  focusOnMount?: boolean;
   onSave: (text: string) => Promise<unknown>;
   onCancel?: () => void;
   onDirty?: (dirty: boolean) => void;
@@ -54,6 +57,9 @@ export function TextForm({
   draftKey?: string;
 }) {
   const id = useId();
+  useEffect(() => {
+    if (focusOnMount) document.getElementById(id)?.focus();
+  }, [focusOnMount, id]);
   const drafts = useDrafts();
   const [value, setValue] = useState(() => drafts?.get(draftKey) ?? initial);
   const [pending, setPending] = useState(false);
@@ -149,7 +155,7 @@ export function ConfirmAction({
   failureMessage = changeFailed,
 }: {
   label: string;
-  icon?: ReactNode;
+  icon?: ActionIconName;
   title: string;
   description: string;
   onConfirm: () => Promise<unknown>;
@@ -161,17 +167,26 @@ export function ConfirmAction({
   const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button
-        ref={trigger}
-        className={icon ? "icon-button" : "secondary-button"}
-        type="button"
-        disabled={disabled}
-        aria-label={icon ? label : undefined}
-        title={icon ? label : undefined}
-        onClick={() => setOpen(true)}
-      >
-        {icon ?? label}
-      </button>
+      {icon ? (
+        <IconButton
+          ref={trigger}
+          label={label}
+          icon={icon}
+          danger
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+        />
+      ) : (
+        <button
+          ref={trigger}
+          className="secondary-button"
+          type="button"
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+        >
+          {label}
+        </button>
+      )}
       {open && (
         <Confirmation
           title={title}

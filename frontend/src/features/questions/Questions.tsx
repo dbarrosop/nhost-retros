@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { ActionIcon, IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
 import type { AppRole } from "../../lib/retro-api";
 import { Answers } from "../answers/Answers";
@@ -97,13 +98,61 @@ function QuestionItem({
   const draftKey = `question:${question.id}`;
   const [editing, setEditing] = useState(() => drafts?.has(draftKey) ?? false);
   const change = useChange(role);
+  const finishEdit = () => {
+    setEditing(false);
+    document.getElementById(`question-title-${question.id}`)?.focus();
+  };
   return (
     <li className="question-item">
       <span className="question-number" aria-hidden="true">
         {String(number).padStart(2, "0")}
       </span>
       <div className="question-content">
-        <h3>{question.text}</h3>
+        <div className="title-row question-title-row">
+          <h3 id={`question-title-${question.id}`} tabIndex={-1}>
+            {question.text}
+          </h3>
+          {role === "facilitator" && (
+            <fieldset className="title-actions" aria-label={`Actions for question ${number}`}>
+              <Link
+                className="icon-button"
+                title={`Open reflection board for question ${number}`}
+                to="/facilitate/$sessionId/questions/$questionId"
+                params={{ sessionId: question.sessionId, questionId: question.id }}
+              >
+                <ActionIcon name="board" />
+                <span className="sr-only">Open reflection board for question {number}</span>
+              </Link>
+              {!ended && !readOnly && (
+                <>
+                  {!editing && (
+                    <IconButton
+                      label={`Edit question ${number}`}
+                      icon="edit"
+                      disabled={change.isPending}
+                      onClick={() => setEditing(true)}
+                    />
+                  )}
+                  <ConfirmAction
+                    label={`Delete question ${number}`}
+                    icon="delete"
+                    title="Delete this question?"
+                    description="Only a question without answers can be deleted. This cannot be undone."
+                    disabled={change.isPending}
+                    onConfirm={async () => {
+                      await change.mutateAsync({
+                        query: deleteQuestion,
+                        variables: { id: question.id },
+                        field: "deleteRetroQuestions",
+                      });
+                    }}
+                    afterConfirm={() => document.getElementById("questions-title")?.focus()}
+                  />
+                </>
+              )}
+            </fieldset>
+          )}
+        </div>
         {editing && (
           <TextForm
             draftKey={draftKey}
@@ -112,54 +161,21 @@ function QuestionItem({
             multiline
             maximum={500}
             submit="Save question"
+            focusOnMount
             disabled={ended || readOnly}
-            onCancel={() => setEditing(false)}
+            onCancel={finishEdit}
             onSave={async (text) => {
               await change.mutateAsync({
                 query: editQuestion,
                 variables: { id: question.id, text },
                 field: "updateRetroQuestions",
               });
-              setEditing(false);
+              finishEdit();
             }}
           />
         )}
-        {role === "facilitator" && (
-          <p>
-            <Link
-              className="quiet-link"
-              to="/facilitate/$sessionId/questions/$questionId"
-              params={{ sessionId: question.sessionId, questionId: question.id }}
-            >
-              Open reflection board for question {number} →
-            </Link>
-          </p>
-        )}
         {role === "user" && (
           <Answers questionId={question.id} number={number} ended={ended} readOnly={readOnly} />
-        )}
-        {role === "facilitator" && !ended && !readOnly && (
-          <div className="action-row">
-            {!editing && (
-              <button className="secondary-button" type="button" onClick={() => setEditing(true)}>
-                Edit question {number}
-              </button>
-            )}
-            <ConfirmAction
-              label={`Delete question ${number}`}
-              title="Delete this question?"
-              description="Only a question without answers can be deleted. This cannot be undone."
-              disabled={change.isPending}
-              onConfirm={async () => {
-                await change.mutateAsync({
-                  query: deleteQuestion,
-                  variables: { id: question.id },
-                  field: "deleteRetroQuestions",
-                });
-              }}
-              afterConfirm={() => document.getElementById("questions-title")?.focus()}
-            />
-          </div>
         )}
       </div>
     </li>

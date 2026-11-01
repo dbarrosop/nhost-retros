@@ -3,7 +3,7 @@ import type { Session } from "@nhost/nhost-js/auth";
 import { MemoryStorage } from "@nhost/nhost-js/session";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../../lib/auth";
@@ -341,6 +341,41 @@ describe("authorized retrospective workspace", () => {
     expect(app.roles.every((role) => role === "facilitator")).toBe(true);
     app.queries.clear();
   });
+  it("places named icon actions beside titles and keeps editing and confirmation focus predictable", async () => {
+    const app = setup(true, `/facilitate/${sessionId}`),
+      user = userEvent.setup();
+    const heading = await screen.findByRole("heading", { name: "October retrospective", level: 1 });
+    const sessionActions = screen.getByRole("group", { name: "Session actions" });
+    expect(sessionActions.parentElement).toContainElement(heading);
+    for (const name of ["Rename session", "End session"]) {
+      const button = within(sessionActions).getByRole("button", { name });
+      expect(button).toHaveAttribute("title", name);
+      expect(within(button).getByText(name)).toHaveClass("sr-only");
+    }
+    const questionHeading = screen.getByRole("heading", { name: "What helped?" });
+    const questionActions = screen.getByRole("group", { name: "Actions for question 1" });
+    expect(questionActions.parentElement).toContainElement(questionHeading);
+    expect(
+      within(questionActions).getByRole("link", { name: "Open reflection board for question 1" }),
+    ).toHaveClass("icon-button");
+    await user.click(within(sessionActions).getByRole("button", { name: "Rename session" }));
+    expect(screen.getByLabelText("Rename session", { exact: true })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(heading).toHaveFocus();
+    await user.click(within(questionActions).getByRole("button", { name: "Edit question 1" }));
+    expect(screen.getByLabelText("Edit question 1", { exact: true })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(questionHeading).toHaveFocus();
+    const end = within(sessionActions).getByRole("button", { name: "End session" });
+    await user.click(end);
+    const dialog = screen.getByRole("dialog", { name: "End this retrospective?" });
+    expect(dialog).toHaveTextContent("Ending is permanent");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(end).toHaveFocus();
+    expect(app.requests.some((request) => request.query.includes("mutation"))).toBe(false);
+    app.queries.clear();
+  });
+
   it("sends explicit facilitator operations, validates text, and preserves dirty drafts across refetch/closure", async () => {
     const user = userEvent.setup();
     const app = setup(true, `/facilitate/${sessionId}`);
@@ -355,6 +390,9 @@ describe("authorized retrospective workspace", () => {
     expect(
       await screen.findByRole("heading", { name: "New conversation", level: 1 }),
     ).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "New conversation", level: 1 })).toHaveFocus(),
+    );
     expect(
       app.requests.find((request) => request.query.includes("mutation RenameSession"))?.variables,
     ).toEqual({ id: sessionId, name: "New conversation" });

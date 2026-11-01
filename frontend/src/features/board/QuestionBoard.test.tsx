@@ -179,7 +179,10 @@ describe("facilitator reflection board", () => {
     const ungrouped = within(screen.getByRole("region", { name: "Ungrouped" }));
     const improve = within(screen.getByRole("region", { name: "Improve" }));
     expect(keep.getAllByRole("article")).toHaveLength(1);
-    expect(keep.getByText("1 of 2")).toHaveTextContent("1 of 2 cards");
+    const count = keep.getByText("1 of 2");
+    expect(count).toHaveTextContent("1 of 2 cards");
+    expect(count.parentElement).toContainElement(keep.getByRole("heading", { name: "Keep" }));
+    expect(count.closest(".title-actions")).toBeNull();
     expect(ungrouped.getByText("0 of 1")).toHaveTextContent("0 of 1 card");
     expect(
       ungrouped.getByText("No cards from the selected participants here (1 hidden by the filter)."),
@@ -206,7 +209,9 @@ describe("facilitator reflection board", () => {
     expect(screen.getAllByRole("article")).toHaveLength(3);
     expect(screen.getByText("3 of 3 cards")).toBeVisible();
     for (const column of [keep, ungrouped, improve]) {
-      expect(column.getByText("1", { exact: true })).toHaveTextContent("1 card");
+      const count = column.getByText("1", { exact: true });
+      expect(count).toHaveTextContent("1 card");
+      expect(count.parentElement).toContainElement(column.getByRole("heading", { level: 2 }));
       expect(column.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
     }
     app.queries.clear();
