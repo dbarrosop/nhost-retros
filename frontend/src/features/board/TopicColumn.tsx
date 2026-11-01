@@ -106,7 +106,7 @@ export function TopicColumn({
         {count === 0 && (
           <p className="column-empty">
             {totalCount > 0
-              ? `No cards from this participant here (${totalCount} hidden by the filter).`
+              ? `No cards from the selected participants here (${totalCount} hidden by the filter).`
               : topic
                 ? "Move a card here to start a theme."
                 : "All reflections have a place."}

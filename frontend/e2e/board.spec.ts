@@ -110,9 +110,15 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       page.getByRole("heading", { level: 1, name: "What should we make space for?" }),
     ).toBeVisible();
     await expect(page.getByText(alice.email, { exact: true })).toBeVisible();
-    await page.getByLabel("Filter responses by participant").selectOption(alice.id);
+    const aliceChip = page.getByRole("button", { name: `Alice (${alice.email})`, exact: true });
+    await expect(aliceChip).toHaveAttribute("aria-pressed", "true");
+    await aliceChip.click();
     await expect(page.getByRole("article")).toHaveCount(1);
-    await page.getByLabel("Filter responses by participant").selectOption("");
+    await aliceChip.click({ modifiers: ["Shift"] });
+    await expect(page.getByRole("article")).toHaveCount(0);
+    await expect(aliceChip).toHaveAttribute("aria-pressed", "false");
+    await aliceChip.click();
+    await expect(page.getByRole("article")).toHaveCount(1);
     for (const name of ["Keep", "Improve"]) {
       await page.getByLabel("New topic", { exact: true }).fill(name);
       await page.getByRole("button", { name: "Add topic", exact: true }).click();

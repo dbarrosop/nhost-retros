@@ -99,8 +99,10 @@ test("participants browse; trusted facilitators manage questions and permanently
     // An unlisted account cannot open a known session URL.
     await reader.goto(`/sessions/${sessionId}`);
     await expect(reader.getByRole("heading", { name: "Session unavailable" })).toBeVisible();
-    await page.getByLabel("Add participant", { exact: true }).selectOption(participant.id);
-    await page.getByRole("button", { name: "Add participant", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Add participant", exact: true })
+      .fill(participant.email);
+    await page.getByRole("option").filter({ hasText: participant.email }).click();
     await expect(
       page.getByRole("button", { name: `Remove ${participant.email}`, exact: true }),
     ).toBeVisible();

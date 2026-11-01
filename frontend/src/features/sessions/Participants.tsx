@@ -1,6 +1,8 @@
-import { useId, useState } from "react";
-import { changeFailed, readFailed, useRetroQuery } from "../../lib/retro-api";
+import { useId } from "react";
+import { ParticipantAvatar } from "../../components/ParticipantAvatar";
+import { readFailed, useRetroQuery } from "../../lib/retro-api";
 import { ConfirmAction, useChange } from "./controls";
+import { ParticipantPicker } from "./ParticipantPicker";
 import {
   addParticipant,
   type ParticipantsResult,
@@ -16,9 +18,7 @@ export function Participants({ sessionId }: { sessionId: string }) {
     { sessionId },
   );
   const change = useChange("facilitator");
-  const inputId = useId();
-  const [selected, setSelected] = useState("");
-  const [error, setError] = useState("");
+  const headingId = useId();
   const session = query.data?.retroSessions[0];
   const participants = session?.participants ?? [];
   const available = (query.data?.retroParticipantAccounts ?? []).filter(
@@ -26,13 +26,12 @@ export function Participants({ sessionId }: { sessionId: string }) {
   );
   const busy = query.isError || change.isPending;
   return (
-    <section className="editor-panel" aria-labelledby={`${inputId}-heading`}>
-      <h2 id={`${inputId}-heading`} tabIndex={-1}>
+    <section className="editor-panel participants-panel" aria-labelledby={headingId}>
+      <h2 id={headingId} tabIndex={-1}>
         Participants
       </h2>
-      <p>
-        Only added participants can open this session or write their own reflection cards.
-        Facilitators retain management access. Responses are kept when someone is removed.
+      <p className="participants-description">
+        Choose who can join this conversation. Removing someone keeps their saved responses.
       </p>
       {query.isPending ? (
         <p role="status">Loading participants…</p>
@@ -42,21 +41,44 @@ export function Participants({ sessionId }: { sessionId: string }) {
         <p>Session unavailable.</p>
       ) : (
         <>
-          {participants.length === 0 && <p>No participants yet.</p>}
-          <ul className="participant-list">
+          {participants.length === 0 && <p className="field-hint">No participants yet.</p>}
+          <ul className="participant-list" aria-label="Session participants">
             {participants.map(({ userId, account }) => {
-              const label = account
-                ? `${account.displayName || account.email} (${account.email})`
-                : "Unavailable account";
+              const name = account?.displayName || account?.email || "Unavailable account";
               return (
                 <li key={userId}>
-                  <span>{label}</span>{" "}
+                  <div className="participant-identity">
+                    <ParticipantAvatar name={name} />
+                    <span className="participant-label">
+                      <span className="participant-name" title={name}>
+                        {name}
+                      </span>
+                      {account && (
+                        <span className="participant-email" title={account.email}>
+                          {account.email}
+                        </span>
+                      )}
+                    </span>
+                  </div>
                   <ConfirmAction
                     label={`Remove ${account?.email || "participant"}`}
+                    icon={
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="16"
+                        height="16"
+                        aria-hidden="true"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                      >
+                        <path d="m4 4 8 8M12 4l-8 8" />
+                      </svg>
+                    }
                     title="Remove participant?"
                     description="They will lose access to this session and their cards. Their saved responses will remain visible to facilitators."
                     disabled={busy}
-                    afterConfirm={() => document.getElementById(`${inputId}-heading`)?.focus()}
+                    afterConfirm={() => document.getElementById(headingId)?.focus()}
                     onConfirm={() =>
                       change.mutateAsync({
                         query: removeParticipant,
@@ -69,53 +91,17 @@ export function Participants({ sessionId }: { sessionId: string }) {
               );
             })}
           </ul>
-          <form
-            className="text-form"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (busy || !available.some((a) => a.id === selected)) return;
-              setError("");
-              try {
-                await change.mutateAsync({
-                  query: addParticipant,
-                  variables: { sessionId, userId: selected },
-                  field: "insertRetroSessionParticipants",
-                });
-                setSelected("");
-              } catch {
-                setError(changeFailed);
-              }
-            }}
-          >
-            <label htmlFor={inputId}>Add participant</label>
-            <select
-              id={inputId}
-              value={selected}
-              disabled={busy}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              <option value="">Select a verified account</option>
-              {available.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.displayName || account.email} · {account.email}
-                </option>
-              ))}
-            </select>
-            <button
-              className="secondary-button"
-              type="submit"
-              disabled={busy || !available.some((a) => a.id === selected)}
-            >
-              Add participant
-            </button>
-            {!available.length && (
-              <p>
-                No more verified accounts available. New participants must sign up and verify their
-                email first.
-              </p>
-            )}
-            {error && <p role="alert">{error}</p>}
-          </form>
+          <ParticipantPicker
+            accounts={available}
+            disabled={busy}
+            onAdd={(account) =>
+              change.mutateAsync({
+                query: addParticipant,
+                variables: { sessionId, userId: account.id },
+                field: "insertRetroSessionParticipants",
+              })
+            }
+          />
         </>
       )}
     </section>

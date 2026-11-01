@@ -12,6 +12,7 @@ import {
 import { onlineManager } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
+import { ParticipantAvatar } from "../../components/ParticipantAvatar";
 import { readFailed, requireAffected, useRetroApi, useRetroQuery } from "../../lib/retro-api";
 import { useSession } from "../sessions/api";
 import { TextForm } from "../sessions/controls";
@@ -121,7 +122,7 @@ export function BoardWorkspace({
   const [focus, setFocus] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const [participant, setParticipant] = useState("");
+  const [selectedParticipants, setSelectedParticipants] = useState<string[] | null>(null);
   // A successful empty permission result takes precedence even during a drag.
   // Holding geometry must never hold onto an unavailable private board.
   const latest = query.data?.retroQuestions[0];
@@ -222,9 +223,12 @@ export function BoardWorkspace({
       board.answers.flatMap((a) => (a.author ? [[a.author.id, a.author] as const] : [])),
     ).values(),
   ];
-  const visibleAnswers = participant
-    ? board.answers.filter((a) => a.author?.id === participant)
-    : board.answers;
+  const visibleAnswers =
+    selectedParticipants === null
+      ? board.answers
+      : board.answers.filter(
+          (answer) => answer.author && selectedParticipants.includes(answer.author.id),
+        );
   return (
     <section className="question-board" aria-labelledby="board-heading" aria-busy={pending}>
       <div className="section-heading">
@@ -236,25 +240,73 @@ export function BoardWorkspace({
           {board.answers.length === 1 ? "card" : "cards"}
         </span>
       </div>
-      <label className="text-form">
-        Filter responses by participant
-        <select
-          value={participant}
-          disabled={pending || !!dragging}
-          onChange={(event) => setParticipant(event.target.value)}
-        >
-          <option value="">All participants</option>
-          {participant && !authors.some((a) => a.id === participant) && (
-            <option value={participant}>Participant no longer has responses</option>
-          )}
-          {authors.map((author) => (
-            <option key={author.id} value={author.id}>
-              {author.displayName || author.email} · {author.email}
-            </option>
-          ))}
-        </select>
-      </label>
-      {visibleAnswers.length === 0 && <p>No responses for this selection.</p>}
+      {(authors.length > 0 || selectedParticipants !== null) && (
+        <fieldset className="participant-filters">
+          <legend>Show cards from · Shift+click for multiple</legend>
+          <div className="participant-chips">
+            <button
+              type="button"
+              className="participant-chip participant-chip-all"
+              aria-pressed={visibleAnswers.length === board.answers.length}
+              disabled={pending || !!dragging}
+              onClick={() => setSelectedParticipants(null)}
+            >
+              Everyone
+            </button>
+            {authors.map((author) => {
+              const name = author.displayName || author.email;
+              const selected =
+                selectedParticipants === null || selectedParticipants.includes(author.id);
+              const count = board.answers.filter(
+                (answer) => answer.author?.id === author.id,
+              ).length;
+              return (
+                <button
+                  key={author.id}
+                  type="button"
+                  className="participant-chip"
+                  aria-label={author.displayName ? `${name} (${author.email})` : author.email}
+                  aria-pressed={selected}
+                  title={`${author.email} · Click to select only this person; Shift+click to toggle`}
+                  disabled={pending || !!dragging}
+                  onClick={(event) => {
+                    if (!event.shiftKey) {
+                      setSelectedParticipants([author.id]);
+                      return;
+                    }
+                    setSelectedParticipants((current) => {
+                      const selection = current ?? authors.map((person) => person.id);
+                      return selection.includes(author.id)
+                        ? selection.filter((id) => id !== author.id)
+                        : [...selection, author.id];
+                    });
+                  }}
+                >
+                  <span className="participant-chip-avatar">
+                    <ParticipantAvatar name={name} />
+                    {selected && (
+                      <span className="participant-chip-check" aria-hidden="true">
+                        ✓
+                      </span>
+                    )}
+                  </span>
+                  <span className="participant-chip-name">{name}</span>
+                  <span className="participant-chip-count" aria-hidden="true">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+      {visibleAnswers.length === 0 && (
+        <p className="field-hint">
+          {board.answers.length
+            ? "All cards are hidden. Select a participant to show their cards."
+            : "No reflection cards yet."}
+        </p>
+      )}
       <p className="board-help" id="board-help">
         Drag by the grip, or use each card’s Move-to menu. On a grip, press Space to pick up, arrow
         keys to choose a column, Space to drop and Escape to cancel. On touch, hold the grip to

@@ -143,7 +143,7 @@ describe("facilitator reflection board", () => {
   it("filters responses by author across topics and keeps grouping scoped to a visible card", async () => {
     const app = setup(),
       user = userEvent.setup();
-    await screen.findByText("Alice");
+    await screen.findByText("Make room for focused work");
     const original = app.current();
     const first = original.answers[0];
     if (!first) throw new Error("Missing fixture card");
@@ -170,7 +170,7 @@ describe("facilitator reflection board", () => {
       await app.queries.invalidateQueries();
     });
     await screen.findByText("Bob’s reflection");
-    await user.selectOptions(screen.getByLabelText("Filter responses by participant"), "bob");
+    await user.click(screen.getByRole("button", { name: "Bob (bob@example.com)" }));
     expect(screen.queryByText("Make room for focused work")).not.toBeInTheDocument();
     expect(screen.getByText("Bob’s reflection")).toBeVisible();
     expect(screen.queryByText("Alice’s topic reflection")).not.toBeInTheDocument();
@@ -182,7 +182,7 @@ describe("facilitator reflection board", () => {
     expect(keep.getByText("1 of 2")).toHaveTextContent("1 of 2 cards");
     expect(ungrouped.getByText("0 of 1")).toHaveTextContent("0 of 1 card");
     expect(
-      ungrouped.getByText("No cards from this participant here (1 hidden by the filter)."),
+      ungrouped.getByText("No cards from the selected participants here (1 hidden by the filter)."),
     ).toBeVisible();
     expect(ungrouped.queryByText("All reflections have a place.")).not.toBeInTheDocument();
     expect(improve.getByText("0", { exact: true })).toHaveTextContent("0 cards");
@@ -197,12 +197,12 @@ describe("facilitator reflection board", () => {
     );
     expect(keep.getByText("0 of 1")).toHaveTextContent("0 of 1 card");
     expect(
-      keep.getByText("No cards from this participant here (1 hidden by the filter)."),
+      keep.getByText("No cards from the selected participants here (1 hidden by the filter)."),
     ).toBeVisible();
     expect(keep.queryByText("Move a card here to start a theme.")).not.toBeInTheDocument();
     expect(app.current().answers[0]?.assignment).toBeNull();
     expect(app.current().answers[1]?.assignment?.topicId).toBe("keep");
-    await user.selectOptions(screen.getByLabelText("Filter responses by participant"), "");
+    await user.click(screen.getByRole("button", { name: "Everyone" }));
     expect(screen.getAllByRole("article")).toHaveLength(3);
     expect(screen.getByText("3 of 3 cards")).toBeVisible();
     for (const column of [keep, ungrouped, improve]) {
@@ -211,10 +211,145 @@ describe("facilitator reflection board", () => {
     }
     app.queries.clear();
   });
+  it("selects exclusively on click, toggles with Shift and restores everyone without writing data", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    const shiftClick = async (chip: HTMLElement) => {
+      await user.keyboard("{Shift>}");
+      await user.click(chip);
+      await user.keyboard("{/Shift}");
+    };
+    await screen.findByText("Make room for focused work");
+    const original = app.current();
+    const first = original.answers[0];
+    if (!first) throw new Error("Missing fixture card");
+    app.replace({
+      ...original,
+      answers: [
+        first,
+        {
+          ...first,
+          id: "bob",
+          text: "Bob’s card",
+          author: { id: "bob", displayName: "Bob", email: "bob@example.com" },
+        },
+        {
+          ...first,
+          id: "cara",
+          text: "Cara’s card",
+          author: { id: "cara", displayName: "Cara", email: "cara@example.com" },
+        },
+      ],
+    });
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    const alice = screen.getByRole("button", { name: "Alice (alice@nhost.io)" });
+    const bob = await screen.findByRole("button", { name: "Bob (bob@example.com)" });
+    const cara = screen.getByRole("button", { name: "Cara (cara@example.com)" });
+    const everyone = screen.getByRole("button", { name: "Everyone" });
+    for (const chip of [alice, bob, cara, everyone])
+      expect(chip).toHaveAttribute("aria-pressed", "true");
+    expect(within(alice).getByText("A")).toHaveAttribute("aria-hidden", "true");
+    await shiftClick(cara);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(cara).toHaveAttribute("aria-pressed", "false");
+    expect(everyone).toHaveAttribute("aria-pressed", "false");
+    await user.click(alice);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("Make room for focused work")).toBeVisible();
+    expect(bob).toHaveAttribute("aria-pressed", "false");
+    await user.click(alice);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(alice).toHaveAttribute("aria-pressed", "true");
+    await user.click(bob);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("Bob’s card")).toBeVisible();
+    expect(alice).toHaveAttribute("aria-pressed", "false");
+    await shiftClick(alice);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(alice).toHaveAttribute("aria-pressed", "true");
+    expect(bob).toHaveAttribute("aria-pressed", "true");
+    expect(cara).toHaveAttribute("aria-pressed", "false");
+    await shiftClick(bob);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("Make room for focused work")).toBeVisible();
+    await shiftClick(alice);
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
+    expect(screen.getByText(/All cards are hidden/)).toBeVisible();
+    await shiftClick(cara);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("Cara’s card")).toBeVisible();
+    await user.click(everyone);
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    alice.focus();
+    await user.keyboard(" ");
+    expect(alice).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("1 of 3 cards")).toBeVisible();
+    bob.focus();
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    expect(screen.getByText("2 of 3 cards")).toBeVisible();
+    await user.click(cara);
+    expect(screen.getByText("1 of 3 cards")).toBeVisible();
+    expect(screen.getByText("Cara’s card")).toBeVisible();
+    const current = app.current();
+    app.replace({
+      ...current,
+      answers: [
+        ...current.answers,
+        {
+          ...first,
+          id: "dave",
+          text: "Dave’s new card",
+          author: { id: "dave", displayName: "Dave", email: "dave@example.com" },
+        },
+      ],
+    });
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(await screen.findByRole("button", { name: "Dave (dave@example.com)" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByText("1 of 4 cards")).toBeVisible();
+    await user.click(everyone);
+    expect(screen.getAllByRole("article")).toHaveLength(4);
+    expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(false);
+    app.queries.clear();
+  });
+
+  it("keeps Everyone available if the selected author becomes unavailable", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    await screen.findByText("Make room for focused work");
+    await user.click(screen.getByRole("button", { name: "Alice (alice@nhost.io)" }));
+    const current = app.current();
+    app.replace({
+      ...current,
+      answers: current.answers.map((answer) => ({ ...answer, author: null })),
+    });
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Alice (alice@nhost.io)" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
+    const everyone = screen.getByRole("button", { name: "Everyone" });
+    expect(everyone).toHaveAttribute("aria-pressed", "false");
+    await user.click(everyone);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByText("Make room for focused work")).toBeVisible();
+    app.queries.clear();
+  });
+
   it("discards an abandoned rename when its toggle closes the editor", async () => {
     const app = setup(),
       user = userEvent.setup();
-    await screen.findByText("Alice");
+    await screen.findByText("Make room for focused work");
     const toggle = screen.getByRole("button", { name: "Rename topic Keep" });
     await user.click(toggle);
     const input = screen.getByLabelText("Rename topic Keep", { exact: true });
@@ -231,7 +366,7 @@ describe("facilitator reflection board", () => {
   it("removes a held private snapshot immediately when a successful read loses access", async () => {
     const app = setup(),
       user = userEvent.setup();
-    await screen.findByText("Alice");
+    await screen.findByText("Make room for focused work");
     const release = app.hold();
     await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");
     app.revoke();
@@ -247,7 +382,7 @@ describe("facilitator reflection board", () => {
   it("shows authors and explicitly assigns, moves and ungroups without any content write", async () => {
     const app = setup(),
       user = userEvent.setup();
-    expect(await screen.findByText("Alice")).toBeVisible();
+    expect(within(await screen.findByRole("article")).getByText("Alice")).toBeVisible();
     expect(screen.getByText("alice@nhost.io")).toBeVisible();
     const select = () => screen.getByRole("combobox", { name: "Move card 1 to" });
     for (const [destination, operation] of [
@@ -274,7 +409,7 @@ describe("facilitator reflection board", () => {
   it("creates/renames themes and confirms deletion that returns cards to Ungrouped", async () => {
     const app = setup(),
       user = userEvent.setup();
-    await screen.findByText("Alice");
+    await screen.findByText("Make room for focused work");
     await user.type(screen.getByLabelText("New topic"), "  Celebrate  ");
     await user.click(screen.getByRole("button", { name: "Add topic" }));
     await screen.findByRole("region", { name: "Celebrate" });
@@ -306,7 +441,7 @@ describe("facilitator reflection board", () => {
   it("holds polled replacements during pending moves, then refetches and reports zero-row conflicts accurately", async () => {
     const app = setup(),
       user = userEvent.setup();
-    await screen.findByText("Alice");
+    await screen.findByText("Make room for focused work");
     const release = app.hold();
     const snapshot = app.current();
     await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");
@@ -314,6 +449,8 @@ describe("facilitator reflection board", () => {
       "aria-disabled",
       "true",
     );
+    expect(screen.getByRole("button", { name: "Everyone" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Alice (alice@nhost.io)" })).toBeDisabled();
     app.replace({
       ...snapshot,
       topics: [...snapshot.topics, { id: "later", name: "Arrived while moving" }],
@@ -349,7 +486,7 @@ describe("facilitator reflection board", () => {
   it("does not queue offline movements or discard a failed topic draft", async () => {
     const app = setup(),
       user = userEvent.setup();
-    await screen.findByText("Alice");
+    await screen.findByText("Make room for focused work");
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     await act(async () => window.dispatchEvent(new Event("offline")));
     await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");

@@ -1,5 +1,5 @@
 import { onlineManager, useMutation } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useDrafts } from "../../lib/drafts";
 import { type AppRole, changeFailed, requireAffected, useRetroApi } from "../../lib/retro-api";
 import { plainText } from "../../lib/text";
@@ -140,6 +140,7 @@ export function TextForm({
 
 export function ConfirmAction({
   label,
+  icon,
   title,
   description,
   onConfirm,
@@ -148,6 +149,7 @@ export function ConfirmAction({
   failureMessage = changeFailed,
 }: {
   label: string;
+  icon?: ReactNode;
   title: string;
   description: string;
   onConfirm: () => Promise<unknown>;
@@ -161,12 +163,14 @@ export function ConfirmAction({
     <>
       <button
         ref={trigger}
-        className="secondary-button"
+        className={icon ? "icon-button" : "secondary-button"}
         type="button"
         disabled={disabled}
+        aria-label={icon ? label : undefined}
+        title={icon ? label : undefined}
         onClick={() => setOpen(true)}
       >
-        {label}
+        {icon ?? label}
       </button>
       {open && (
         <Confirmation
