@@ -6,6 +6,7 @@ dist/
 coverage/
 *.tsbuildinfo
 .vite/
+.wrangler/
 .pnpm-store/
 .direnv/
 
@@ -13,6 +14,8 @@ coverage/
 .env
 .env*
 !.env.example
+.dev.vars
+.dev.vars.*
 .secrets
 .secrets.*
 !.secrets.example

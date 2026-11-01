@@ -522,6 +522,44 @@ h3 {
   margin-top: 1rem;
   flex-wrap: wrap;
 }
+.oauth2-layout > * {
+  min-width: 0;
+}
+.oauth2-details {
+  margin-block: 2rem;
+  line-height: 1.7;
+}
+.oauth2-details dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 1rem;
+}
+.oauth2-details dd {
+  margin: 0.3rem 0 0;
+  overflow-wrap: anywhere;
+}
+.oauth2-permissions-title {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+.oauth2-scopes {
+  padding-left: 1.25rem;
+  line-height: 1.7;
+}
+.oauth2-scopes li {
+  margin-block: 1rem;
+  overflow-wrap: anywhere;
+}
+.oauth2-scopes span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.oauth2-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
 .workspace {
   padding-block: 2rem 4rem;
   min-height: 75vh;

@@ -171,7 +171,7 @@ contracts are checked locally. This workflow correction does not claim a hosted
 CI run or a new browser-suite run; hosted CI and production acceptance remain
 unexecuted.
 Production operator inputs and safe rollback/retention requirements are listed
-in [operations](operations.md#production-checklist-deferred-not-a-deployment-command).
+in [operations](operations.md#production-checklist-frontend-deployment-available).
 
 ## Unrestricted email-domain regression
 

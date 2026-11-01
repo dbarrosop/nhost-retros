@@ -116,6 +116,90 @@ reset Docker, database volumes, migrations or metadata. Explicit signup/sign-in
 naturally writes Auth accounts/sessions on the configured backend. Integration commands
 below provision a **separate disposable project**; never reset `backend-*`.
 
+## Nhost as an OIDC provider
+
+`/oauth2/login` is the consent page for Nhost's OAuth2 provider. Set
+`auth.oauth2Provider.loginURL` to this page's absolute URL on the same frontend
+that uses your Nhost project (locally, `http://localhost:5173/oauth2/login`).
+Register OAuth2 clients and enable the provider in Nhost before using the flow.
+For production, configure the deployed URL in the project's settings as well.
+
+Start sign-in from the third-party application, not this page directly. Nhost
+redirects here with `request_id`; the page retrieves the validated client ID,
+callback and scopes from Auth. Existing sessions are reused; otherwise the normal
+email-code form signs in without losing the request. Signing in never grants
+access automatically: the user must choose **Allow access** before the page posts
+consent with their Nhost access token and follows Auth's returned callback.
+Only HTTP(S) callbacks are supported. The frontend never exchanges codes or
+handles a client secret.
+
+With Auth 0.52.0, every approval grants renewable background access, even without
+`offline_access`; each refresh renews the refresh-token lifetime set by
+`auth.oauth2Provider.refreshToken.expiresIn` (currently 2,592,000 seconds / 30 days).
+This app has no user-facing grant revocation controls: refresh tokens expire if the
+application stops renewing them, or an operator can revoke them.
+
+**Cancel** grants nothing and stays on this site. The current Nhost login API has
+no denial endpoint or state-bearing rejection response, so the page does not
+fabricate a callback; close it and return to the application. Expired, completed
+or invalid requests must be restarted from the third-party application.
+
+## Deploy frontend to Cloudflare Workers
+
+The default `nix develop` shell includes Wrangler. Run from the repository root:
+
+```sh
+nix develop
+pnpm install --frozen-lockfile
+wrangler login  # Or securely export CLOUDFLARE_API_TOKEN for automation.
+export CLOUDFLARE_ACCOUNT_ID='<production Cloudflare account ID>'
+export VITE_NHOST_SUBDOMAIN='<cloud Nhost project subdomain>'
+export VITE_NHOST_REGION='<cloud Nhost project region>'
+make deploy-frontend WRANGLER_DEPLOY_ARGS=--dry-run  # Build/package only; no upload.
+make deploy-frontend
+```
+
+This builds the SPA and deploys Worker `retros` with its static assets to the
+existing **`nhost-app` Workers for Platforms dispatch namespace**. The infra-managed
+wildcard DNS and dispatcher already send `https://retros.nhost.app` to that Worker;
+this app does not create DNS, routes, custom domains, or another dispatcher.
+The Cloudflare identity must be able to deploy scripts/assets to that namespace
+(account **Workers Scripts: Edit** permission); the namespace must already exist.
+
+Override the hostname through the environment or Make, for example:
+
+```sh
+FRONTEND_DOMAIN=retro-preview.nhost.app make deploy-frontend
+```
+
+Only a single lowercase `<name>.nhost.app` label is accepted, matching the existing
+dispatcher's routing. The Worker name is derived from that label, so the example
+publishes a separate `retro-preview` Worker. `CLOUDFLARE_DISPATCH_NAMESPACE` defaults
+to `nhost-app` and can be overridden for equivalent infrastructure elsewhere.
+Domains outside `nhost.app` need separate DNS/TLS and an infra `CUSTOM_DOMAINS` KV
+mapping to the Worker name; this target deliberately does not provision them.
+
+Export the public backend variables explicitly for deployment (the guard does not
+read Vite `.env*` files). Alternatively export **both** `VITE_NHOST_AUTH_URL` and
+`VITE_NHOST_GRAPHQL_URL` as HTTPS custom endpoints. Existing Vite overrides still
+take precedence: review them before building. All these values are baked into the
+browser bundle, **not** Worker secrets. Cloudflare credentials must never use a
+`VITE_` prefix. Deployment refuses implicit/local project defaults; normal local
+builds and preview remain unchanged.
+
+`frontend/wrangler.toml` serves SPA navigations (including direct deep-link reloads)
+through `index.html`. Unmatched non-navigation requests, such as missing JS/CSS,
+return 404 through the minimal Worker fallback. Fingerprinted `/assets/*` files
+cache immutably; HTML uses Cloudflare's default revalidation policy. Configure the
+production Nhost client URL/redirect allowlist and exact Auth/GraphQL CORS origins
+for `https://retros.nhost.app` (or your override) before onboarding.
+
+This target publishes only the frontend: it does not migrate/configure a production
+backend, seed accounts, grant facilitators, or provision SMTP. Follow the
+[production checklist](docs/operations.md#production-checklist-frontend-deployment-available)
+for backend-first rollout and smoke checks. Do not deploy the local backend config
+or demo seed to production.
+
 ## Checks
 
 ```sh
@@ -186,9 +270,9 @@ alone does not separate words in the computed accessible name checked by tests.
 
 ## Decisions
 
-See [docs/decisions.md](docs/decisions.md) for implementation choices. Production
-hosting/onboarding is deferred: it requires operator-supplied frontend URLs and
-custom SMTP configuration/capacity review. No production values are assumed here.
+See [docs/decisions.md](docs/decisions.md) for implementation choices. Frontend
+hosting is configured above; actual production rollout/onboarding still requires
+an approved backend and custom SMTP configuration/capacity review.
 [Operations](docs/operations.md) covers static-host fallback, backend-first rollout,
 backups, safe rollback and retained-account constraints; [local acceptance
 evidence](docs/acceptance.md) records the fresh disposable replay. CI runs isolated

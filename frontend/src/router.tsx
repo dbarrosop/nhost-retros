@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import { AuthPage } from "./features/auth/AuthPage";
 import { Workspace } from "./features/auth/Workspace";
+import { OAuth2LoginPage } from "./features/oauth2/OAuth2LoginPage";
 import { useAuth } from "./lib/auth";
 import { Welcome } from "./Welcome";
 
@@ -78,6 +79,17 @@ const authRoute = createRoute({
   path: "/auth",
   component: AuthPage,
 });
+const oauth2LoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/oauth2/login",
+  validateSearch: (search: Record<string, unknown>) => ({
+    request_id: typeof search.request_id === "string" ? search.request_id : "",
+  }),
+  component: () => {
+    const { request_id } = oauth2LoginRoute.useSearch();
+    return <OAuth2LoginPage key={request_id} requestId={request_id} />;
+  },
+});
 const workspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/workspace",
@@ -111,6 +123,7 @@ const boardRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   welcomeRoute,
   authRoute,
+  oauth2LoginRoute,
   workspaceRoute,
   facilitatorRoute,
   sessionRoute,
