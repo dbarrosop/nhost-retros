@@ -482,7 +482,10 @@ touch only the separately registered disposable database, never the developer st
 
 ## Session lifecycle and acceptance fixtures
 
-Eligible accounts can browse every active and ended session and its questions.
+Eligible participants can browse only the active and ended sessions they are
+currently enrolled in and those sessions' questions; eligibility alone grants no
+session or question access. Trusted facilitators retain management access to every
+session (see [Explicit session participants](#explicit-session-participants)).
 Only trusted facilitators manage content. End confirmation is irreversible: a
 closed session cannot be renamed, reopened or deleted, and its questions cannot
 be added/edited/deleted. Answer cards also become immutable. Database triggers lock
@@ -510,8 +513,9 @@ and metadata independently and checks desktop/mobile management and read-only
 participant flows, including multiple private cards, cross-tab closure and draft
 retention. Participant card reads omit author IDs; facilitators may read all cards
 and author IDs but cannot edit/delete others’ content. For their own participation,
-facilitators follow the session’s participant link, which sends the ordinary user
-role. The facilitator API additionally exposes only retained-answer authors'
+facilitators must first add themselves under **Participants**, then follow the
+session’s participant link, which sends the ordinary user role. The facilitator
+API additionally exposes only retained-answer authors'
 IDs, display names and emails; participants cannot select or filter by this
 projection or grouping relationships.
 
