@@ -96,6 +96,14 @@ test("participants browse; trusted facilitators manage questions and permanently
     reader.on("request", (request) => {
       if (request.url() === graphqlUrl) readerRoles.push(request.headers()["x-hasura-role"]);
     });
+    // An unlisted account cannot open a known session URL.
+    await reader.goto(`/sessions/${sessionId}`);
+    await expect(reader.getByRole("heading", { name: "Session unavailable" })).toBeVisible();
+    await page.getByLabel("Add participant", { exact: true }).selectOption(participant.id);
+    await page.getByRole("button", { name: "Add participant", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: `Remove ${participant.email}`, exact: true }),
+    ).toBeVisible();
     await reader.goto(`/sessions/${sessionId}`);
     await expect(
       reader.getByRole("heading", { name: "What helped us do our best work?" }),
@@ -133,10 +141,21 @@ test("participants browse; trusted facilitators manage questions and permanently
       page.getByRole("button", { name: /End session|Rename session|Delete question/ }),
     ).not.toBeVisible();
     for (const view of [page, reader, stale])
-      expect(await view.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true,
-      );
+      expect(
+        await view.evaluate(
+          () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
     await stale.close();
+    const remove = page.getByRole("button", { name: `Remove ${participant.email}`, exact: true });
+    await remove.click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: `Remove ${participant.email}`, exact: true })
+      .click();
+    await expect(remove).not.toBeVisible();
+    await reader.reload();
+    await expect(reader.getByRole("heading", { name: "Session unavailable" })).toBeVisible();
     await reader.close();
 
     // Empty-only session removal has its own confirmation and a real navigation target.

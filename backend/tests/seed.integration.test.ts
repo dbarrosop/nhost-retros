@@ -41,6 +41,11 @@ async function snapshot() {
         "SELECT * FROM retro_sessions WHERE id::text LIKE 'acde1000-0000-4000-8000-%' ORDER BY id",
       )
     ).rows,
+    participants: (
+      await db.query(
+        "SELECT * FROM retro_session_participants WHERE session_id::text LIKE 'acde1000-0000-4000-8000-%' ORDER BY session_id,user_id",
+      )
+    ).rows,
     questions: (
       await db.query(
         "SELECT * FROM retro_questions WHERE id::text LIKE 'acde2000-0000-4000-8000-%' ORDER BY id",
@@ -71,6 +76,7 @@ describe("local retrospective demo seed", () => {
     expect(data.users).toHaveLength(9);
     expect(data.roles).toHaveLength(19);
     expect(data.sessions).toHaveLength(3);
+    expect(data.participants).toHaveLength(27);
     expect(data.questions).toHaveLength(9);
     expect(data.answers).toHaveLength(72);
     expect(data.topics).toHaveLength(19);
@@ -145,6 +151,10 @@ describe("local retrospective demo seed", () => {
     );
     await db.query("DELETE FROM auth.user_roles WHERE user_id=$1 AND role='facilitator'", [
       id(0, 1),
+    ]);
+    await db.query("DELETE FROM retro_session_participants WHERE session_id=$1 AND user_id=$2", [
+      id(1, 1),
+      id(0, 2),
     ]);
     const edited = await snapshot();
     await db.query(seed);

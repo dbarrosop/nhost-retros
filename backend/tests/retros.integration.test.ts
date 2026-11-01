@@ -82,6 +82,10 @@ describe("sessions and questions through both real-JWT engines", () => {
           "insertRetroSessions",
         ) as { returning: { id: string; name: string; ended: boolean }[] };
         const session = rows.returning[0];
+        await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+          session.id,
+          participant.id,
+        ]);
         expect(session.name).toBe(name);
         expect(session.ended).toBe(false);
         expect(
@@ -218,6 +222,10 @@ describe("sessions and questions through both real-JWT engines", () => {
         [session],
       )
     ).rows[0].id;
+    await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+      session,
+      manager.id,
+    ]);
     try {
       for (const [email, disabled, verified, anonymous] of [
         [manager.email, true, true, false],

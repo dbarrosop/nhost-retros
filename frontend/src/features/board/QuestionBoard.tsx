@@ -121,6 +121,7 @@ export function BoardWorkspace({
   const [focus, setFocus] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [participant, setParticipant] = useState("");
   // A successful empty permission result takes precedence even during a drag.
   // Holding geometry must never hold onto an unavailable private board.
   const latest = query.data?.retroQuestions[0];
@@ -215,6 +216,15 @@ export function BoardWorkspace({
       </p>
     );
   const columns = [{ id: ungrouped }, ...board.topics];
+  // Include retained authors even after their session membership is removed.
+  const authors = [
+    ...new Map(
+      board.answers.flatMap((a) => (a.author ? [[a.author.id, a.author] as const] : [])),
+    ).values(),
+  ];
+  const visibleAnswers = participant
+    ? board.answers.filter((a) => a.author?.id === participant)
+    : board.answers;
   return (
     <section className="question-board" aria-labelledby="board-heading" aria-busy={pending}>
       <div className="section-heading">
@@ -222,9 +232,29 @@ export function BoardWorkspace({
           Reflection board
         </h2>
         <span className="small-label">
-          {board.answers.length} {board.answers.length === 1 ? "card" : "cards"}
+          {visibleAnswers.length} of {board.answers.length}{" "}
+          {board.answers.length === 1 ? "card" : "cards"}
         </span>
       </div>
+      <label className="text-form">
+        Filter responses by participant
+        <select
+          value={participant}
+          disabled={pending || !!dragging}
+          onChange={(event) => setParticipant(event.target.value)}
+        >
+          <option value="">All participants</option>
+          {participant && !authors.some((a) => a.id === participant) && (
+            <option value={participant}>Participant no longer has responses</option>
+          )}
+          {authors.map((author) => (
+            <option key={author.id} value={author.id}>
+              {author.displayName || author.email} · {author.email}
+            </option>
+          ))}
+        </select>
+      </label>
+      {visibleAnswers.length === 0 && <p>No responses for this selection.</p>}
       <p className="board-help" id="board-help">
         Drag by the grip, or use each card’s Move-to menu. On a grip, press Space to pick up, arrow
         keys to choose a column, Space to drop and Escape to cancel. On touch, hold the grip to
@@ -290,7 +320,7 @@ export function BoardWorkspace({
         <div className="board-columns">
           {columns.map((column) => {
             const topic = board.topics.find((t) => t.id === column.id);
-            const cards = board.answers.filter(
+            const cards = visibleAnswers.filter(
               (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
             );
             return (

@@ -292,6 +292,31 @@ Constellation's missing-role response). No role can select the eligibility view
 or an Auth directory. Live SQL membership revocation denies facilitator data even
 with an old JWT. Changing the email domain alone does not revoke access.
 
+### Explicit session participants
+
+`20261107000000_retro_participants` adds a session/account membership table and a
+facilitator-only minimal directory of verified, eligible accounts. Apply the new
+migration and current metadata together using the existing backend-first workflow
+(and refresh Constellation) before releasing the frontend. **There is no backfill:**
+all existing sessions initially have no participants, even if they have responses.
+A trusted facilitator must open each session and use **Participants → Add participant**.
+Accounts must first sign up and verify their email; this does not send invitations.
+Facilitators retain global management/board access, but must add themselves before
+using the ordinary participant route to answer.
+
+User-role session/question reads and all own-answer reads/writes require live
+session membership in addition to account eligibility. Removal preserves responses
+and grouping but revokes participant access, including with existing JWTs. Answer
+triggers lock membership rows so stale concurrent writes fail if removal commits
+first. Membership can change after ending, but content remains permanently frozen.
+The response-board filter includes retained authors even after removal.
+
+Use the scratch migration roundtrip for down/up verification. Never apply down SQL
+to a live backend: removing this membership boundary requires coordinated older
+metadata/application deployment and would restore the old broader read policy.
+The local demo seed enrolls accounts only for newly created demo sessions; rerunning
+it does not enroll pre-existing sessions or restore removed memberships.
+
 ## Auth fixture and rate budgets
 
 Auth accepts any email domain and allows implicit OTP signup. Email verification

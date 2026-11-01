@@ -41,7 +41,9 @@ export function Sessions({ role }: { role: AppRole }) {
       <section className="sessions-section" aria-labelledby="sessions-title">
         <div className="section-heading">
           <h2 id="sessions-title">Retrospectives</h2>
-          <span className="small-label">Shared with the team</span>
+          <span className="small-label">
+            {role === "facilitator" ? "All conversations" : "Sessions you’ve joined"}
+          </span>
         </div>
         {sessions.isPending && <p role="status">Loading conversations…</p>}
         {sessions.isError ? (
@@ -56,7 +58,7 @@ export function Sessions({ role }: { role: AppRole }) {
                     No retrospectives are available.{" "}
                     {role === "facilitator"
                       ? "Create the first conversation above."
-                      : "A facilitator can start one for the team."}
+                      : "Ask a facilitator to add you as a participant to a session."}
                   </p>
                 </div>
               )}

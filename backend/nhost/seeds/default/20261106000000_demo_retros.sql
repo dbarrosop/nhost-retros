@@ -48,6 +48,7 @@ BEGIN
   END LOOP;
 
   -- Sessions start active so all inserts obey the ordinary closure triggers.
+  WITH created_sessions AS (
   INSERT INTO public.retro_sessions(id, name, created_at)
   SELECT demo.id, demo.name, now()-make_interval(days => demo.age_days)
   FROM (VALUES
@@ -55,7 +56,14 @@ BEGIN
     ('acde1000-0000-4000-8000-000000000002'::uuid, 'Sprint 25 - Developer experience', 7),
     ('acde1000-0000-4000-8000-000000000003'::uuid, 'Platform launch - Next chapter', 1)
   ) AS demo(id, name, age_days)
-  WHERE NOT EXISTS (SELECT 1 FROM public.retro_sessions existing WHERE existing.id=demo.id);
+  WHERE NOT EXISTS (SELECT 1 FROM public.retro_sessions existing WHERE existing.id=demo.id)
+  RETURNING id
+  )
+  -- Enroll only when creating a demo session; replay never restores removals.
+  INSERT INTO public.retro_session_participants(session_id, user_id)
+  SELECT s.id, u.id FROM created_sessions s CROSS JOIN auth.users u
+  WHERE u.id BETWEEN 'acde0000-0000-4000-8000-000000000001'::uuid
+    AND 'acde0000-0000-4000-8000-000000000009'::uuid;
 
   INSERT INTO public.retro_questions(id, session_id, text, created_at)
   SELECT demo.id, demo.session_id, demo.text,

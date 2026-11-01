@@ -86,13 +86,19 @@ select_permissions:
         - text
         - created_at
       filter:
-        _exists:
-          _table:
-            name: retro_eligible_users
-            schema: public
-          _where:
-            id:
-              _eq: X-Hasura-User-Id
+        _and:
+          - session:
+              participants:
+                user_id:
+                  _eq: X-Hasura-User-Id
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+
 update_permissions:
   - role: facilitator
     permission:

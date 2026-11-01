@@ -19,6 +19,13 @@ configuration:
     update: updateRetroSessions
     update_by_pk: updateRetroSession
 array_relationships:
+  - name: participants
+    using:
+      foreign_key_constraint_on:
+        column: session_id
+        table:
+          name: retro_session_participants
+          schema: public
   - name: questions
     using:
       foreign_key_constraint_on:
@@ -72,13 +79,18 @@ select_permissions:
         - ended
         - created_at
       filter:
-        _exists:
-          _table:
-            name: retro_eligible_users
-            schema: public
-          _where:
-            id:
-              _eq: X-Hasura-User-Id
+        _and:
+          - participants:
+              user_id:
+                _eq: X-Hasura-User-Id
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+
 update_permissions:
   - role: facilitator
     permission:

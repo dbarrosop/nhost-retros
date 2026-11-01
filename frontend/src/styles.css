@@ -626,8 +626,21 @@ button.primary-link {
   font-size: 1.2rem;
   font-weight: 500;
 }
+.participant-list {
+  padding-left: 1.25rem;
+  overflow-wrap: anywhere;
+}
+.participant-list li {
+  margin-block: 0.75rem;
+}
+.participant-list button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .text-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.65rem;
   max-width: 45rem;
 }
@@ -635,7 +648,8 @@ button.primary-link {
   font-size: 0.85rem;
 }
 .text-form input,
-.text-form textarea {
+.text-form textarea,
+.text-form select {
   width: 100%;
   min-width: 0;
   border: 1px solid #58665c;

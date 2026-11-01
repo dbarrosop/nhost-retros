@@ -6,7 +6,11 @@ TanStack Router and TanStack Query, backed by Nhost Auth and GraphQL.
 ## Current slice
 
 Verified email OTP signup/sign-in, restoration and cross-tab signout lead to
-shared active/ended retrospectives and their questions. Participants add multiple
+active/ended retrospectives and their questions, visible only to explicitly enrolled
+participants and trusted facilitators. Facilitators add/remove existing verified
+accounts per session; new and existing sessions start with no participants (no
+migration backfill). Facilitators must also enroll themselves to contribute.
+Participants add multiple
 private reflection cards per question and edit/delete only their own active cards;
 operator-provisioned facilitators create, rename, delete empty sessions, manage
 questions and permanently end conversations. Backend permissions recheck live
@@ -14,7 +18,9 @@ account eligibility and trusted membership; database locks freeze closed content
 even for stale/concurrent clients. Verified accounts from any email domain are admitted;
 no password UI exists. Facilitators open a per-question reflection board with
 author-labelled cards, named topics, mouse/touch/keyboard dragging and a Move-to
-menu on every card. Topic management and grouping stay available after ending;
+menu on every card, plus a participant response filter. Removing a participant
+revokes session/question/own-card access without deleting their responses; retained
+authors remain filterable. Participant management, topic management and grouping stay available after ending;
 facilitators never edit another person’s answer content. Participants cannot enter
 or query this board.
 Welcome prompts remain editorial, not participant content. The welcome screen
@@ -79,7 +85,9 @@ started by setup.
 - `factilitator@acme.local` with trusted facilitator membership (spelling intentional).
 - Eight fictional participants: `avery`, `jordan`, `samira`, `diego`, `mei`, `noah`,
   `imani` and `luca`, all at `@acme.local`.
-- Three retrospectives (two active, one ended), nine questions, 72 responses,
+- Three retrospectives (two active, one ended), with all nine demo accounts enrolled
+  only when each demo session is first created; replay never restores removals.
+- Nine questions, 72 responses,
   19 topics and 54 assignments; 18 cards remain ungrouped.
 
 Nhost applies seeds on the first local startup. For an existing stack, add

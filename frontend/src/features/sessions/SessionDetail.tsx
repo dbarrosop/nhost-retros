@@ -6,6 +6,7 @@ import { Questions } from "../questions/Questions";
 import { useSession } from "./api";
 import { ConfirmAction, TextForm, useChange } from "./controls";
 import { deleteSession, endSession, renameSession } from "./facilitator-api";
+import { Participants } from "./Participants";
 
 export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
   const query = useSession(role, id);
@@ -44,7 +45,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             <p className="hero-description">
               {session.ended
                 ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only."
-                : "Take a moment to look back. These questions are shared with everyone on the team."}
+                : "Take a moment to look back. These questions are shared with this session’s participants."}
             </p>
           </div>
           {renaming && (
@@ -114,9 +115,13 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             <p>
               <Link className="quiet-link" to="/sessions/$sessionId" params={{ sessionId: id }}>
                 View and write your own reflection cards →
-              </Link>
+              </Link>{" "}
+              <span className="field-hint">
+                Add yourself as a participant below to use this view.
+              </span>
             </p>
           )}
+          {role === "facilitator" && <Participants sessionId={id} />}
           <Questions
             questions={session.questions}
             sessionId={id}

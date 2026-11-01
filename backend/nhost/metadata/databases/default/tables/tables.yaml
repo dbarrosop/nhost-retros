@@ -21,3 +21,5 @@
 - "!include storage_buckets.yaml"
 - "!include storage_files.yaml"
 - "!include storage_virus.yaml"
+- "!include public_retro_participant_accounts.yaml"
+- "!include public_retro_session_participants.yaml"

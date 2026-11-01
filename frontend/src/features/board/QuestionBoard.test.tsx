@@ -67,7 +67,7 @@ function setup() {
               data: { retroQuestions: unavailable ? [] : [structuredClone(board)] },
             });
       await gate;
-      const { name, id, topicId } = body.variables;
+      const { name, id, topicId, answerId } = body.variables;
       const fields: Record<string, string> = {
         AddTopic: "insertRetroTopics",
         RenameTopic: "updateRetroTopics",
@@ -90,10 +90,14 @@ function setup() {
           );
         }
         if (["AssignAnswer", "MoveAnswer", "UngroupAnswer"].includes(operation))
-          board.answers = board.answers.map((answer) => ({
-            ...answer,
-            assignment: operation === "UngroupAnswer" ? null : { topicId },
-          }));
+          board.answers = board.answers.map((answer) =>
+            answer.id === answerId
+              ? {
+                  ...answer,
+                  assignment: operation === "UngroupAnswer" ? null : { topicId },
+                }
+              : answer,
+          );
       }
       const field = fields[operation];
       if (!field) throw new Error("Unexpected test mutation");
@@ -136,6 +140,47 @@ function setup() {
 }
 
 describe("facilitator reflection board", () => {
+  it("filters responses by author across topics and keeps grouping scoped to a visible card", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    await screen.findByText("Alice");
+    const original = app.current();
+    const first = original.answers[0];
+    if (!first) throw new Error("Missing fixture card");
+    app.replace({
+      ...original,
+      answers: [
+        ...original.answers,
+        {
+          ...first,
+          id: "bob-answer",
+          text: "Bob’s reflection",
+          author: { id: "bob", displayName: "Bob", email: "bob@example.com" },
+          assignment: { topicId: "keep" },
+        },
+      ],
+    });
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await screen.findByText("Bob’s reflection");
+    await user.selectOptions(screen.getByLabelText("Filter responses by participant"), "bob");
+    expect(screen.queryByText("Make room for focused work")).not.toBeInTheDocument();
+    expect(screen.getByText("Bob’s reflection")).toBeVisible();
+    expect(screen.getByText("1 of 2 cards")).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "Keep" })).getAllByRole("article"),
+    ).toHaveLength(1);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 2 to" }), "improve");
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Move card 2 to" })).toHaveValue("improve"),
+    );
+    expect(app.current().answers[0]?.assignment).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Filter responses by participant"), "");
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getByText("2 of 2 cards")).toBeVisible();
+    app.queries.clear();
+  });
   it("discards an abandoned rename when its toggle closes the editor", async () => {
     const app = setup(),
       user = userEvent.setup();
@@ -158,7 +203,7 @@ describe("facilitator reflection board", () => {
       user = userEvent.setup();
     await screen.findByText("Alice");
     const release = app.hold();
-    await user.selectOptions(screen.getByRole("combobox"), "keep");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");
     app.revoke();
     await act(async () => {
       await app.queries.invalidateQueries();
@@ -209,8 +254,10 @@ describe("facilitator reflection board", () => {
     await user.type(input, "Small wins");
     await user.click(screen.getByRole("button", { name: "Save topic name" }));
     await screen.findByRole("region", { name: "Small wins" });
-    await user.selectOptions(screen.getByRole("combobox"), "new");
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("new"));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "new");
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("new"),
+    );
     await user.click(screen.getByRole("button", { name: "Delete topic Small wins" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(app.current().topics.some((t) => t.name === "Small wins")).toBe(true);
@@ -221,7 +268,7 @@ describe("facilitator reflection board", () => {
     await waitFor(() =>
       expect(screen.queryByRole("region", { name: "Small wins" })).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("combobox")).toHaveValue("ungrouped");
+    expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("ungrouped");
     expect(screen.getByRole("heading", { name: "Ungrouped" })).toHaveFocus();
     app.queries.clear();
   });
@@ -231,8 +278,11 @@ describe("facilitator reflection board", () => {
     await screen.findByText("Alice");
     const release = app.hold();
     const snapshot = app.current();
-    await user.selectOptions(screen.getByRole("combobox"), "keep");
-    expect(screen.getByRole("combobox")).toHaveAttribute("aria-disabled", "true");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");
+    expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     app.replace({
       ...snapshot,
       topics: [...snapshot.topics, { id: "later", name: "Arrived while moving" }],
@@ -241,21 +291,26 @@ describe("facilitator reflection board", () => {
       await app.queries.invalidateQueries();
     });
     expect(screen.queryByRole("heading", { name: "Arrived while moving" })).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toHaveValue("ungrouped");
+    expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("ungrouped");
     await act(async () => release());
     await screen.findByRole("heading", { name: "Arrived while moving" });
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("keep"));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("keep"),
+    );
     app.zero();
-    await user.selectOptions(screen.getByRole("combobox"), "improve");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "improve");
     expect(await screen.findByRole("alert")).toHaveTextContent(groupingFailed);
-    expect(screen.getByRole("combobox")).toHaveValue("keep");
-    expect(screen.getByRole("combobox")).toHaveFocus();
+    expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("keep");
+    expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveFocus();
     app.failRead();
     await act(async () => {
       await app.queries.invalidateQueries();
     });
     await waitFor(() =>
-      expect(screen.getByRole("combobox")).toHaveAttribute("aria-disabled", "true"),
+      expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      ),
     );
     expect(screen.queryByText("secret database detail")).not.toBeInTheDocument();
     app.queries.clear();
@@ -266,7 +321,7 @@ describe("facilitator reflection board", () => {
     await screen.findByText("Alice");
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     await act(async () => window.dispatchEvent(new Event("offline")));
-    await user.selectOptions(screen.getByRole("combobox"), "keep");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");
     expect(await screen.findByRole("alert")).toHaveTextContent(groupingFailed);
     expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(false);
     await user.type(screen.getByLabelText("New topic"), "Keep this theme");
@@ -276,8 +331,10 @@ describe("facilitator reflection board", () => {
     await act(async () => window.dispatchEvent(new Event("online")));
     expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(false);
     // The navigator hint is still false, but Query's online event allows a new intent.
-    await user.selectOptions(screen.getByRole("combobox"), "keep");
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("keep"));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 1 to" }), "keep");
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("keep"),
+    );
     expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(true);
     app.queries.clear();
   });

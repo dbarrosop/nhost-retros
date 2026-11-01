@@ -19,7 +19,7 @@ import { connect, guard } from "./lib/target.ts";
 
 const close =
   "mutation($id: uuid!) { updateRetroSessions(where: {id: {_eq: $id}}, _set: {ended: true}) { affected_rows } }";
-async function conversation(db: Client) {
+async function conversation(db: Client, participants: string[]) {
   const session = (
     await db.query(
       "INSERT INTO retro_sessions(name) VALUES('Private cards acceptance') RETURNING id",
@@ -31,6 +31,11 @@ async function conversation(db: Client) {
       [session],
     )
   ).rows[0].id;
+  for (const userId of participants)
+    await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
+      session,
+      userId,
+    ]);
   return { session, question };
 }
 
@@ -46,7 +51,7 @@ describe("private multiple cards and actual role-schema contracts", () => {
       await setFacilitator(db, manager.id, "grant");
       await manager.refresh();
       for (const url of [target.endpoints.hasura, target.endpoints.graphql]) {
-        const { session, question } = await conversation(db);
+        const { session, question } = await conversation(db, [alice.id, bob.id, manager.id]);
         const run = (query: string, variables = {}, who = alice, role = "user") =>
           gql(target, url, who, role, query, variables);
         const mine = async (who = alice): Promise<AnswersResult["retroAnswers"]> =>
@@ -415,7 +420,7 @@ describe("answer closure locking", () => {
       const pid = (await a.query("SELECT pg_backend_pid() AS pid")).rows[0].pid;
       for (const operation of ["insert", "update", "delete"])
         for (const winner of ["write", "rollback-write", "close", "rollback-close"]) {
-          const { session, question } = await conversation(observer);
+          const { session, question } = await conversation(observer, [author.id]);
           const id = (
             await observer.query(
               "INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,'Before') RETURNING id",
@@ -475,7 +480,7 @@ describe("answer closure locking", () => {
                 await expect(observer.query(sql, [question, author.id])).rejects.toThrow();
             }
         }
-      const { question } = await conversation(observer);
+      const { question } = await conversation(observer, [author.id]);
       const id = (
         await observer.query(
           "INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,'Before') RETURNING id",
@@ -527,7 +532,7 @@ describe("answer closure locking", () => {
       for (const url of [target.endpoints.hasura, target.endpoints.graphql])
         for (const operation of ["insert", "update", "delete"])
           for (const winner of ["write", "close"]) {
-            const { session, question } = await conversation(observer);
+            const { session, question } = await conversation(observer, [author.id]);
             const id = (
               await observer.query(
                 "INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,'Before') RETURNING id",
