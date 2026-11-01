@@ -70,7 +70,8 @@ export function scopeDescription(scope: string) {
     profile: "View your name, profile picture and locale.",
     email: "View your email address and verification status.",
     phone: "View your phone number and verification status.",
-    offline_access: "Maintain access when you are not using the application.",
+    offline_access:
+      "Background access is included with every approval, with or without this scope.",
     graphql: "Access the GraphQL API with your account’s roles and permissions.",
   };
   if (scope.startsWith("graphql:role:")) {

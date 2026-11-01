@@ -202,6 +202,10 @@ function ConsentApproval({
       <p className="auth-description">
         By choosing Allow access, you grant this application the permissions listed on this page.
       </p>
+      <p className="auth-description">
+        This application can keep and renew access in the background even when you are not using it,
+        whether or not it requests offline_access.
+      </p>
       {!canQuery && (
         <p role="status">{notice || "Reconnecting your session. Wait before allowing access."}</p>
       )}

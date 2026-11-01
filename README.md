@@ -133,6 +133,12 @@ consent with their Nhost access token and follows Auth's returned callback.
 Only HTTP(S) callbacks are supported. The frontend never exchanges codes or
 handles a client secret.
 
+With Auth 0.52.0, every approval grants renewable background access, even without
+`offline_access`; each refresh renews the refresh-token lifetime set by
+`auth.oauth2Provider.refreshToken.expiresIn` (currently 2,592,000 seconds / 30 days).
+This app has no user-facing grant revocation controls: refresh tokens expire if the
+application stops renewing them, or an operator can revoke them.
+
 **Cancel** grants nothing and stays on this site. The current Nhost login API has
 no denial endpoint or state-bearing rejection response, so the page does not
 fabricate a callback; close it and return to the application. Expired, completed

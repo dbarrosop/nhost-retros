@@ -107,8 +107,16 @@ describe("OAuth2 login and consent", () => {
   );
 
   it("shows only Auth's client, callback and scopes and never automatically approves an existing session", async () => {
-    const { get, post, assign } = setup({
+    const { get, post, assign, store } = setup({
       entry: `${path}&client_id=evil&scope=evil&redirect_uri=https://evil.example`,
+      prepare: (client) => {
+        // Keep approval disabled until the expired stored session can be renewed.
+        client.sessionStorage.set({
+          ...session(),
+          accessToken: `e30.${btoa(JSON.stringify({ sub: "user", exp: Date.now() / 1000 - 60 }))}.test`,
+        });
+        vi.mocked(client.auth.refreshToken).mockRejectedValueOnce({ status: 503 });
+      },
     });
     expect(await screen.findByRole("heading", { name: "Authorize application" })).toBeVisible();
     expect(get).toHaveBeenCalledWith(
@@ -121,6 +129,16 @@ describe("OAuth2 login and consent", () => {
     expect(screen.getByText("custom:read")).toBeVisible();
     expect(screen.getByText(/“user” role/)).toBeVisible();
     expect(screen.queryByText("evil")).not.toBeInTheDocument();
+    expect(screen.queryByText("offline_access")).not.toBeInTheDocument();
+    const allow = screen.getByRole("button", { name: "Allow access" });
+    expect(allow).toBeDisabled();
+    expect(
+      screen.getByText(
+        /keep and renew access in the background even when you are not using it, whether or not it requests offline_access/,
+      ),
+    ).toBeVisible();
+    await act(() => store.refresh());
+    expect(screen.getByRole("button", { name: "Allow access" })).toBeEnabled();
     expect(post).not.toHaveBeenCalled();
     expect(assign).not.toHaveBeenCalled();
   });

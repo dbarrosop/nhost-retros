@@ -39,6 +39,12 @@ describe("OAuth2 consent boundaries", () => {
     );
   });
 
+  it("describes offline_access as background access already included with every approval", () => {
+    expect(scopeDescription("offline_access")).toBe(
+      "Background access is included with every approval, with or without this scope.",
+    );
+  });
+
   it("describes GraphQL and unknown scopes without treating prototype keys as known scopes", () => {
     expect(scopeDescription("graphql")).toContain("roles and permissions");
     expect(scopeDescription("graphql:role:viewer")).toContain("“viewer” role");
