@@ -38,12 +38,14 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
         <>
           {query.isError && <p role="alert">{readFailed} Your draft is kept below.</p>}
           <div className="session-intro">
-            <p className="eyebrow">
-              {role === "facilitator" ? "Facilitator workspace" : "Team retrospective"}
-            </p>
-            <span className={`session-status ${session.ended ? "ended" : ""}`}>
-              {session.ended ? "Ended" : "Active"}
-            </span>
+            <div className="session-meta">
+              <p className="eyebrow">
+                {role === "facilitator" ? "Facilitator workspace" : "Team retrospective"}
+              </p>
+              <span className={`session-status ${session.ended ? "ended" : ""}`}>
+                {session.ended ? "Ended" : "Active"}
+              </span>
+            </div>
             <div className="title-row session-title-row">
               <h1 id="session-title" tabIndex={-1}>
                 {session.name}
@@ -93,10 +95,12 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
                 </fieldset>
               )}
             </div>
-            <p className="hero-description">
+            <p className="session-description">
               {session.ended
                 ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only."
-                : "Take a moment to look back. These questions are shared with this session’s participants."}
+                : role === "facilitator"
+                  ? "Manage questions below. Open a board to explore your team’s reflections."
+                  : "Take a moment to reflect on the questions below."}
             </p>
           </div>
           {renaming && (
@@ -121,13 +125,11 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             </div>
           )}
           {role === "facilitator" && (
-            <p>
+            <p className="session-participation">
               <Link className="quiet-link" to="/sessions/$sessionId" params={{ sessionId: id }}>
-                View and write your own reflection cards →
+                Write your own reflections →
               </Link>{" "}
-              <span className="field-hint">
-                Add yourself as a participant below to use this view.
-              </span>
+              <span className="field-hint">Enroll yourself in Participants to contribute.</span>
             </p>
           )}
           {role === "facilitator" && <Participants sessionId={id} />}

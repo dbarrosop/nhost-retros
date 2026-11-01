@@ -228,6 +228,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     });
     await observer.clock.runFor(2000);
     await ready;
+    await observer.getByText("Account", { exact: true }).click();
     await observer.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(
       observer.getByRole("heading", { name: "Welcome back", exact: true }),

@@ -101,6 +101,9 @@ describe("private reflection cards", () => {
       await waitFor(() => expect(input).toHaveValue(""));
     }
     expect(await screen.findByText("First thought")).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Your reflection cards for question 1" }),
+    ).toBeVisible();
     expect(screen.getAllByRole("article")).toHaveLength(2);
     expect(app.requests.find((r) => r.query.includes("mutation AddAnswer"))?.variables).toEqual({
       questionId: "question",

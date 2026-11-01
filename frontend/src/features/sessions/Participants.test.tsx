@@ -103,13 +103,50 @@ function setup() {
 }
 
 describe("facilitator participant controls", () => {
+  it("starts collapsed and keeps a search and live count through toggles", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    await screen.findByText("No participants yet.");
+    const toggle = screen.getByRole("button", { name: /^Participants/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle.querySelector("svg.disclosure-chevron")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("combobox", { name: "Add participant" })).not.toBeInTheDocument();
+    toggle.focus();
+    await user.keyboard("{Enter}");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const input = screen.getByRole("combobox", { name: "Add participant" });
+    await user.type(input, "Alice");
+    await user.click(toggle);
+    expect(screen.queryByRole("combobox", { name: "Add participant" })).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(input).toHaveValue("Alice");
+    await user.click(input);
+    await user.click(screen.getByRole("option", { name: /Alice Morgan/ }));
+    await screen.findByRole("button", { name: "Remove alice@example.com" });
+    expect(toggle).toHaveTextContent("· 1");
+    await user.click(toggle);
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveTextContent("· 1");
+    app.queries.clear();
+  });
+
   it("opens searchable options, adds on selection and removes through an accessible X button", async () => {
     const app = setup(),
       user = userEvent.setup();
     await screen.findByText("No participants yet.");
+    await user.click(screen.getByRole("button", { name: /^Participants/ }));
     const input = screen.getByRole("combobox", { name: "Add participant" });
     await user.click(input);
+    expect(input.parentElement?.querySelector("svg.participant-search-chevron")).toHaveClass(
+      "disclosure-chevron",
+    );
     expect(screen.getAllByRole("option")).toHaveLength(2);
+    const option = screen.getByRole("option", { name: /Alice Morgan/ });
+    expect(option).toHaveClass("popup-item");
+    expect(option.closest(".popup-panel")).toHaveClass("participant-options-panel");
     expect(
       within(screen.getByRole("option", { name: /Alice Morgan/ })).getByText("AM"),
     ).toHaveAttribute("aria-hidden", "true");
@@ -137,7 +174,7 @@ describe("facilitator participant controls", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "Remove alice@example.com" }),
     );
     await screen.findByText("No participants yet.");
-    expect(screen.getByRole("heading", { name: "Participants" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /^Participants/ })).toHaveFocus();
     expect(app.requests.every((r) => r.role === "facilitator")).toBe(true);
     const mutations = app.requests.filter((r) => r.query.includes("mutation"));
     expect(mutations.map((r) => r.variables)).toEqual([
@@ -152,6 +189,7 @@ describe("facilitator participant controls", () => {
     const app = setup(),
       user = userEvent.setup();
     await screen.findByText("No participants yet.");
+    await user.click(screen.getByRole("button", { name: /^Participants/ }));
     const input = screen.getByRole("combobox", { name: "Add participant" });
     await user.click(input);
     await user.keyboard("{ArrowDown}");
@@ -179,6 +217,7 @@ describe("facilitator participant controls", () => {
     const app = setup(),
       user = userEvent.setup();
     await screen.findByText("No participants yet.");
+    await user.click(screen.getByRole("button", { name: /^Participants/ }));
     const input = screen.getByRole("combobox", { name: "Add participant" });
     await user.type(input, "not-an-account");
     expect(screen.getByText("No matching participants.")).toBeVisible();
@@ -194,6 +233,7 @@ describe("facilitator participant controls", () => {
     const app = setup(),
       user = userEvent.setup();
     await screen.findByText("No participants yet.");
+    await user.click(screen.getByRole("button", { name: /^Participants/ }));
     const release = app.hold();
     const input = screen.getByRole("combobox", { name: "Add participant" });
     await user.click(input);
@@ -211,6 +251,7 @@ describe("facilitator participant controls", () => {
     const app = setup(),
       user = userEvent.setup();
     await screen.findByText("No participants yet.");
+    await user.click(screen.getByRole("button", { name: /^Participants/ }));
     app.fail();
     const input = screen.getByRole("combobox", { name: "Add participant" });
     await user.type(input, "Alice");

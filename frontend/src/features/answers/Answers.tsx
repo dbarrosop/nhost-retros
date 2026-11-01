@@ -33,7 +33,10 @@ export function Answers({
   const heading = useRef<HTMLHeadingElement>(null);
   const locked = ended || readOnly || query.isError || query.isPending;
   return (
-    <section className="answers-section" aria-labelledby={`answers-${questionId}`}>
+    <section
+      className="answers-section"
+      aria-label={`Your reflection cards for question ${number}`}
+    >
       <h4 ref={heading} id={`answers-${questionId}`} tabIndex={-1}>
         Your reflection cards
       </h4>

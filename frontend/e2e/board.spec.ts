@@ -105,7 +105,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     await expect(participant.getByText("Alice", { exact: true })).toHaveCount(0);
 
     await page.goto(`/facilitate/${sessionId}`);
-    await page.getByRole("link", { name: "Open reflection board for question 1" }).click();
+    await page.getByRole("link", { name: "Open board for question 1" }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "What should we make space for?" }),
     ).toBeVisible();
@@ -278,7 +278,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       ),
     ).toBe(true);
-    await page.getByRole("link", { name: "Open reflection board for question 1" }).click();
+    await page.getByRole("link", { name: "Open board for question 1" }).click();
     await expect(page.getByText(/topics and grouping remain open/)).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Edit card|Delete card|Edit question|End session/ }),

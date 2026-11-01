@@ -3,7 +3,7 @@ import type { Session } from "@nhost/nhost-js/auth";
 import { MemoryStorage } from "@nhost/nhost-js/session";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider } from "../../lib/auth";
@@ -13,7 +13,7 @@ import { createAppRouter } from "../../router";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const questionId = "22222222-2222-4222-8222-222222222222";
-function setup(facilitator: boolean, path: string, withCard = false) {
+function setup(facilitator: boolean, path: string, withCard = false, withEndedSession = false) {
   const client = createNhostClient({ storage: new MemoryStorage(), configure: [] });
   const session: Session = {
     accessToken: `e30.${btoa(JSON.stringify({ sub: "test", exp: Date.now() / 1000 + 900 }))}.test`,
@@ -68,11 +68,13 @@ function setup(facilitator: boolean, path: string, withCard = false) {
       };
       if (body.query.includes("mutation")) {
         if (body.query.includes("RenameSession") && affected) name = body.variables.name;
-        const field = body.query.includes("RenameSession")
-          ? "updateRetroSessions"
-          : body.query.includes("EditQuestion")
-            ? "updateRetroQuestions"
-            : "insertRetroQuestions";
+        const field = body.query.includes("CreateSession")
+          ? "insertRetroSessions"
+          : body.query.includes("RenameSession")
+            ? "updateRetroSessions"
+            : body.query.includes("EditQuestion")
+              ? "updateRetroQuestions"
+              : "insertRetroQuestions";
         return Response.json({ data: { [field]: { affected_rows: affected } } });
       }
       return failedRead || (failedSessionRead && body.query.includes("query Session("))
@@ -102,7 +104,21 @@ function setup(facilitator: boolean, path: string, withCard = false) {
                       },
                     ],
                   }
-                : { retroSessions: [record] },
+                : {
+                    retroSessions: [
+                      record,
+                      ...(withEndedSession && body.query.includes("query Sessions")
+                        ? [
+                            {
+                              id: "33333333-3333-4333-8333-333333333333",
+                              name: "September retrospective",
+                              ended: true,
+                              createdAt: "2026-09-01T00:00:00Z",
+                            },
+                          ]
+                        : []),
+                    ],
+                  },
           });
     }),
   );
@@ -143,6 +159,237 @@ afterEach(() => {
 });
 
 describe("authorized retrospective workspace", () => {
+  it("keeps account details in a dismissible menu and preserves sign-out", async () => {
+    const app = setup(true, "/facilitate");
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Retrospectives", level: 1 });
+    expect(screen.queryByText("VERIFIED ACCOUNT")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "The approach" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
+    expect(screen.getByText("Facilitator view", { selector: "summary" })).toBeVisible();
+    const signOutButton = screen.getByRole("button", { name: "Sign out" });
+    expect(signOutButton).not.toBeVisible();
+    expect(signOutButton).toHaveClass("popup-item");
+    expect(signOutButton).not.toHaveClass("secondary-button");
+    expect(signOutButton.closest(".popup-panel")).toHaveClass("header-menu-panel");
+    const account = screen.getByText("Account", { exact: true }).closest("summary");
+    if (!account) throw new Error("Account disclosure missing");
+    expect(account.querySelector(".disclosure-chevron, svg")).toBeNull();
+    await user.click(account);
+    expect(screen.getByText("test@nhost.io")).toBeVisible();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Sign out" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(account).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Sign out" })).not.toBeVisible();
+    await user.click(account);
+    await user.click(screen.getByRole("heading", { name: "Retrospectives", level: 1 }));
+    expect(screen.getByRole("button", { name: "Sign out" })).not.toBeVisible();
+    await user.click(account);
+    const signOut = vi.spyOn(app.store, "signOut").mockResolvedValue();
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalledOnce();
+    app.queries.clear();
+  });
+
+  it.each([
+    ["/workspace", false],
+    [`/sessions/${sessionId}`, false],
+    ["/facilitate", true],
+    [`/facilitate/${sessionId}`, true],
+    [`/facilitate/${sessionId}/questions/${questionId}`, true],
+  ] as const)("shows the current view and switches safely from %s", async (path, facilitating) => {
+    const app = setup(true, path);
+    const user = userEvent.setup();
+    const current = facilitating ? "Facilitator view" : "Participant view";
+    const other = facilitating ? "Participant view" : "Facilitator view";
+    const trigger = await screen.findByText(current, { selector: "summary" });
+    expect(trigger).toBeVisible();
+    expect(trigger.querySelector("svg.disclosure-chevron")).toHaveAttribute("aria-hidden", "true");
+    const otherOption = screen.getByRole("link", { name: other });
+    expect(otherOption).not.toBeVisible();
+    expect(otherOption).toHaveClass("popup-item");
+    expect(otherOption.closest(".popup-panel")).toHaveClass("header-menu-panel");
+    await user.click(trigger);
+    expect(screen.getByRole("link", { name: current })).toHaveAttribute("aria-current");
+    const target = screen.getByRole("link", { name: other });
+    expect(target).toBeVisible();
+    expect(target).not.toHaveAttribute("aria-current");
+    expect(target).toHaveAttribute("href", facilitating ? "/workspace" : "/facilitate");
+    await user.click(target);
+    await screen.findByRole("heading", { name: "Retrospectives", level: 1 });
+    const updated = screen.getByText(other, { selector: "summary" });
+    expect(updated).toBeVisible();
+    expect(updated).toHaveFocus();
+    expect(updated.closest("details")).not.toHaveAttribute("open");
+    expect(app.router.state.location.pathname).toBe(facilitating ? "/workspace" : "/facilitate");
+    expect(
+      app.queries
+        .getQueryCache()
+        .getAll()
+        .every((query) => query.queryKey[2] === (facilitating ? "user" : "facilitator")),
+    ).toBe(true);
+    app.queries.clear();
+  });
+
+  it.each([false, true])(
+    "keeps view options clickable through a transient focus loss (facilitating=%s)",
+    async (facilitating) => {
+      const app = setup(true, facilitating ? "/facilitate" : "/workspace");
+      const user = userEvent.setup();
+      const trigger = await screen.findByText(
+        facilitating ? "Facilitator view" : "Participant view",
+        { selector: "summary" },
+      );
+      await user.click(trigger);
+      // A pointer activation can blur the focused control without a new focus target.
+      // Hiding the menu here removes the link before the browser dispatches its click.
+      fireEvent.blur(trigger, { relatedTarget: null });
+      expect(trigger.closest("details")).toHaveAttribute("open");
+      const target = screen.getByRole("link", {
+        name: facilitating ? "Participant view" : "Facilitator view",
+      });
+      expect(target).toBeVisible();
+      await user.click(target);
+      await waitFor(() =>
+        expect(app.router.state.location.pathname).toBe(
+          facilitating ? "/workspace" : "/facilitate",
+        ),
+      );
+      expect(
+        screen.getByText(facilitating ? "Participant view" : "Facilitator view", {
+          selector: "summary",
+        }),
+      ).toBeVisible();
+      expect(trigger.closest("details")).not.toHaveAttribute("open");
+      app.queries.clear();
+    },
+  );
+
+  it("dismisses the view menu with Escape, outside clicks and keyboard focus changes", async () => {
+    const app = setup(true, "/workspace");
+    const user = userEvent.setup();
+    const view = await screen.findByText("Participant view", { selector: "summary" });
+    const menu = view.closest("details");
+    await user.click(view);
+    await user.tab();
+    expect(screen.getByRole("link", { name: "Participant view" })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(view).toHaveFocus();
+    expect(menu).not.toHaveAttribute("open");
+    // Native summary Enter/Space activation is covered in the browser check.
+    await user.click(view);
+    expect(menu).toHaveAttribute("open");
+    await user.tab();
+    await user.tab();
+    await user.tab();
+    const account = screen.getByText("Account", { exact: true }).closest("summary");
+    expect(account).toHaveFocus();
+    expect(menu).not.toHaveAttribute("open");
+    await user.click(view);
+    await user.click(screen.getByRole("heading", { name: "Retrospectives", level: 1 }));
+    expect(menu).not.toHaveAttribute("open");
+    await user.click(view);
+    if (!account) throw new Error("Account disclosure missing");
+    await user.click(account);
+    expect(menu).not.toHaveAttribute("open");
+    expect(account.closest("details")).toHaveAttribute("open");
+    app.queries.clear();
+  });
+
+  it("labels participant-only accounts without offering a facilitator switch", async () => {
+    const app = setup(false, "/workspace");
+    await screen.findByRole("heading", { name: "Retrospectives", level: 1 });
+    expect(screen.getByText("Participant view", { exact: true })).toBeVisible();
+    expect(screen.getByText("Participant view", { exact: true }).closest("details")).toBeNull();
+    expect(screen.queryByText("Facilitator view", { exact: true })).not.toBeInTheDocument();
+    app.queries.clear();
+  });
+
+  it("puts active retrospectives first and reveals ended ones on request", async () => {
+    const app = setup(false, "/workspace", false, true);
+    const user = userEvent.setup();
+    const active = await screen.findByRole("list", { name: "Active retrospectives" });
+    expect(within(active).getByRole("link", { name: /October retrospective/ })).toBeVisible();
+    expect(screen.getByRole("link", { name: /September retrospective/ })).not.toBeVisible();
+    expect(screen.queryByRole("button", { name: "New retrospective" })).not.toBeInTheDocument();
+    const endedToggle = screen.getByText("Ended retrospectives", { exact: true });
+    expect(endedToggle.closest("summary")?.querySelector("svg.disclosure-chevron")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    await user.click(endedToggle);
+    expect(screen.getByRole("link", { name: /September retrospective/ })).toBeVisible();
+    await user.click(screen.getByText("Ended retrospectives", { exact: true }));
+    expect(screen.getByRole("link", { name: /September retrospective/ })).not.toBeVisible();
+    app.queries.clear();
+  });
+
+  it("opens creation on demand, preserves failed input, and restores trigger focus", async () => {
+    const app = setup(true, "/facilitate");
+    const user = userEvent.setup();
+    const trigger = await screen.findByRole("button", { name: "New retrospective" });
+    expect(screen.queryByLabelText("Retrospective name")).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await user.click(trigger);
+    const input = screen.getByLabelText("Retrospective name");
+    expect(input).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await user.type(input, "  A focused retrospective  ");
+    app.zeroRows();
+    await user.click(screen.getByRole("button", { name: "Create retrospective" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This change wasn’t saved");
+    expect(input).toHaveValue("  A focused retrospective  ");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(trigger).toHaveFocus();
+    expect(screen.queryByLabelText("Retrospective name")).not.toBeInTheDocument();
+    await user.click(trigger);
+    expect(screen.getByLabelText("Retrospective name")).toHaveValue("");
+    app.queries.clear();
+  });
+
+  it("closes the creation form after a successful explicit facilitator operation", async () => {
+    const app = setup(true, "/facilitate");
+    const user = userEvent.setup();
+    const trigger = await screen.findByRole("button", { name: "New retrospective" });
+    await user.click(trigger);
+    await user.type(screen.getByLabelText("Retrospective name"), "  Weekly reflection  ");
+    await user.click(screen.getByRole("button", { name: "Create retrospective" }));
+    await waitFor(() =>
+      expect(screen.queryByLabelText("Retrospective name")).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
+    expect(
+      app.requests.find((request) => request.query.includes("mutation CreateSession"))?.variables,
+    ).toEqual({ name: "Weekly reflection" });
+    expect(app.roles.every((role) => role === "facilitator")).toBe(true);
+    app.queries.clear();
+  });
+
+  it("restores an unsaved retrospective name after session reconnection", async () => {
+    const app = setup(true, "/facilitate");
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "New retrospective" }));
+    await user.type(screen.getByLabelText("Retrospective name"), "Keep this retrospective draft");
+    const refresh = vi
+      .mocked(app.client.auth.refreshToken)
+      .mockRejectedValue(new TypeError("Offline"));
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000_000);
+    await act(async () => {
+      await app.store.refresh();
+    });
+    expect(screen.queryByLabelText("Retrospective name")).not.toBeInTheDocument();
+    now.mockRestore();
+    refresh.mockResolvedValue({ body: app.session, status: 200, headers: new Headers() });
+    await act(async () => {
+      await app.store.refresh();
+    });
+    expect(await screen.findByLabelText("Retrospective name")).toHaveValue(
+      "Keep this retrospective draft",
+    );
+    app.queries.clear();
+  });
+
   it.each([
     [false, "/sessions/not-a-uuid", "Session unavailable"],
     [true, "/facilitate/not-a-uuid", "Session unavailable"],
@@ -285,9 +532,7 @@ describe("authorized retrospective workspace", () => {
   });
   it("shows private-card participation without management controls and redirects facilitator guesses", async () => {
     const app = setup(false, `/facilitate/${sessionId}`);
-    expect(
-      await screen.findByRole("heading", { name: "Welcome to the team space." }),
-    ).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Retrospectives", level: 1 })).toBeVisible();
     await userEvent.click(await screen.findByRole("link", { name: /October retrospective/ }));
     expect(await screen.findByRole("heading", { name: "What helped?" })).toBeVisible();
     expect(
@@ -300,7 +545,7 @@ describe("authorized retrospective workspace", () => {
   });
   it("redirects participant board deep links before issuing any board request", async () => {
     const app = setup(false, `/facilitate/${sessionId}/questions/${questionId}`);
-    await screen.findByRole("heading", { name: "Welcome to the team space." });
+    await screen.findByRole("heading", { name: "Retrospectives", level: 1 });
     expect(app.requests.some((request) => request.query.includes("query QuestionBoard"))).toBe(
       false,
     );
@@ -356,8 +601,8 @@ describe("authorized retrospective workspace", () => {
     const questionActions = screen.getByRole("group", { name: "Actions for question 1" });
     expect(questionActions.parentElement).toContainElement(questionHeading);
     expect(
-      within(questionActions).getByRole("link", { name: "Open reflection board for question 1" }),
-    ).toHaveClass("icon-button");
+      within(questionActions).getByRole("link", { name: "Open board for question 1" }),
+    ).toHaveTextContent("Open board");
     await user.click(within(sessionActions).getByRole("button", { name: "Rename session" }));
     expect(screen.getByLabelText("Rename session", { exact: true })).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Cancel" }));

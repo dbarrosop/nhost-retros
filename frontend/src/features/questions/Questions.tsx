@@ -115,13 +115,13 @@ function QuestionItem({
           {role === "facilitator" && (
             <fieldset className="title-actions" aria-label={`Actions for question ${number}`}>
               <Link
-                className="icon-button"
-                title={`Open reflection board for question ${number}`}
+                className="secondary-button open-board-link"
+                aria-label={`Open board for question ${number}`}
                 to="/facilitate/$sessionId/questions/$questionId"
                 params={{ sessionId: question.sessionId, questionId: question.id }}
               >
                 <ActionIcon name="board" />
-                <span className="sr-only">Open reflection board for question {number}</span>
+                <span>Open board</span>
               </Link>
               {!ended && !readOnly && (
                 <>

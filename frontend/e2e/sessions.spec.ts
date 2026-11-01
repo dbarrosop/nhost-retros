@@ -52,10 +52,28 @@ test("participants browse; trusted facilitators manage questions and permanently
     await seed(context, manager);
     await seed(readerContext, participant);
     await page.goto("/workspace");
-    await page.getByRole("link", { name: "Facilitator workspace", exact: true }).click();
+    const view = page.locator(".view-menu > summary");
+    await expect(view).toHaveText("Participant view");
+    await view.click();
+    const facilitatorView = page.getByRole("link", { name: "Facilitator view", exact: true });
+    await facilitatorView.hover();
+    await page.mouse.down();
+    try {
+      // A null focus target during a pointer gesture must not hide its link
+      // before mouse-up can dispatch the click that performs navigation.
+      await page.evaluate(() => {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      });
+      await expect(facilitatorView).toBeVisible();
+    } finally {
+      await page.mouse.up();
+    }
+    await expect(page).toHaveURL(/\/facilitate$/);
+    await expect(view).toHaveText("Facilitator view");
     const name = `Team reflection ${randomUUID()}`;
-    await page.getByLabel("Session name", { exact: true }).fill(name);
-    await page.getByRole("button", { name: "Create session", exact: true }).click();
+    await page.getByRole("button", { name: "New retrospective", exact: true }).click();
+    await page.getByLabel("Retrospective name", { exact: true }).fill(name);
+    await page.getByRole("button", { name: "Create retrospective", exact: true }).click();
     await page.getByRole("link", { name: new RegExp(name) }).click();
     await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
     await page.getByRole("button", { name: "Rename session", exact: true }).click();
@@ -99,6 +117,7 @@ test("participants browse; trusted facilitators manage questions and permanently
     // An unlisted account cannot open a known session URL.
     await reader.goto(`/sessions/${sessionId}`);
     await expect(reader.getByRole("heading", { name: "Session unavailable" })).toBeVisible();
+    await page.getByRole("button", { name: /^Participants/ }).click();
     await page
       .getByRole("combobox", { name: "Add participant", exact: true })
       .fill(participant.email);
@@ -163,8 +182,9 @@ test("participants browse; trusted facilitators manage questions and permanently
     // Empty-only session removal has its own confirmation and a real navigation target.
     await page.getByRole("link", { name: "All retrospectives" }).click();
     const emptyName = `Empty reflection ${randomUUID()}`;
-    await page.getByLabel("Session name", { exact: true }).fill(emptyName);
-    await page.getByRole("button", { name: "Create session", exact: true }).click();
+    await page.getByRole("button", { name: "New retrospective", exact: true }).click();
+    await page.getByLabel("Retrospective name", { exact: true }).fill(emptyName);
+    await page.getByRole("button", { name: "Create retrospective", exact: true }).click();
     await page.getByRole("link", { name: new RegExp(emptyName) }).click();
     await page.getByRole("button", { name: "Delete session", exact: true }).click();
     await page

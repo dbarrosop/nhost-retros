@@ -5,21 +5,27 @@ import {
   Link,
   Outlet,
   type RouterHistory,
+  useRouterState,
 } from "@tanstack/react-router";
+import { AccountMenu } from "./features/auth/AccountMenu";
 import { AuthPage } from "./features/auth/AuthPage";
 import { Workspace } from "./features/auth/Workspace";
+import { WorkspaceViewMenu } from "./features/auth/WorkspaceViewMenu";
 import { OAuth2LoginPage } from "./features/oauth2/OAuth2LoginPage";
 import { useAuth } from "./lib/auth";
 import { Welcome } from "./Welcome";
 
 function Layout() {
   const { session } = useAuth();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const facilitating = pathname === "/facilitate" || pathname.startsWith("/facilitate/");
+  const facilitator = session?.user?.roles.includes("facilitator");
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <header className="site-header">
+      <header className={`site-header${session ? " workspace-header" : ""}`}>
         <Link className="brand" to="/" aria-label="Retro home">
           <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
             <rect width="40" height="40" rx="12" fill="currentColor" />
@@ -36,21 +42,41 @@ function Layout() {
             retro<span className="brand-dot">.</span>
           </span>
         </Link>
-        <span className="header-caption">A space for the Nhost team</span>
-        <nav aria-label="Main navigation">
-          <Link className="quiet-link" to="/" hash="how-it-works">
-            The approach <span aria-hidden="true">↗</span>
-          </Link>
-          <Link className="quiet-link" to={session ? "/workspace" : "/auth"}>
-            {session ? "Your workspace" : "Sign in"}
-          </Link>
-        </nav>
+        {session ? (
+          <>
+            <nav aria-label="Main navigation">
+              <Link className="workspace-nav-link" to={facilitating ? "/facilitate" : "/workspace"}>
+                Retrospectives
+              </Link>
+              <WorkspaceViewMenu
+                key={session.user?.id}
+                facilitating={!!facilitator && facilitating}
+                canSwitch={!!facilitator}
+              />
+            </nav>
+            <AccountMenu key={session.user?.id} />
+          </>
+        ) : (
+          <>
+            <span className="header-caption">A space for the Nhost team</span>
+            <nav aria-label="Main navigation">
+              <Link className="quiet-link" to="/" hash="how-it-works">
+                The approach <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="quiet-link" to="/auth">
+                Sign in
+              </Link>
+            </nav>
+          </>
+        )}
       </header>
       <Outlet />
-      <footer className="site-footer">
-        <span>Made for the Nhost team.</span>
-        <span>One conversation at a time.</span>
-      </footer>
+      {!session && (
+        <footer className="site-footer">
+          <span>Made for the Nhost team.</span>
+          <span>One conversation at a time.</span>
+        </footer>
+      )}
     </div>
   );
 }

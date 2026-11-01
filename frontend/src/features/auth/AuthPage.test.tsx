@@ -100,7 +100,10 @@ describe("email OTP forms", () => {
     await user.click(screen.getByRole("button", { name: "Send sign-in code" }));
     await user.type(await screen.findByLabelText("One-time code"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify and continue" }));
-    expect(await screen.findByRole("link", { name: "Facilitator workspace" })).toBeVisible();
+    const view = await screen.findByText("Participant view", { selector: "summary" });
+    expect(view).toBeVisible();
+    await user.click(view);
+    expect(screen.getByRole("link", { name: "Facilitator view" })).toBeVisible();
     expect(store.getSnapshot().canQuery).toBe(true);
     expect(store.getSnapshot().session?.user?.defaultRole).toBe("facilitator");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

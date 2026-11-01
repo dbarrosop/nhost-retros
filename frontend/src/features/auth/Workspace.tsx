@@ -19,7 +19,7 @@ export function Workspace({
   sessionId?: string;
   questionId?: string;
 }) {
-  const { ready, session, notice, store, generation, canQuery } = useAuth();
+  const { ready, session, notice, generation, canQuery } = useAuth();
   const activity = useActivity();
   const queries = useQueryClient();
   useLayoutEffect(() => {
@@ -42,43 +42,19 @@ export function Workspace({
           {notice}
         </p>
       )}
-      <section className="account-panel" aria-labelledby="account-title">
-        <div>
-          <span className="small-label">VERIFIED ACCOUNT</span>
-          <h2 id="account-title">{session.user?.email}</h2>
-          <p>
-            {facilitator
-              ? "Facilitator membership confirmed. You can use either workspace."
-              : "Signed in as a participant."}
-          </p>
-        </div>
-        <div className="action-row">
-          {facilitator && (
-            <Link
-              className="secondary-button"
-              to={role === "facilitator" ? "/workspace" : "/facilitate"}
-            >
-              {role === "facilitator" ? "Participant workspace" : "Facilitator workspace"}
-            </Link>
-          )}
-          <button className="secondary-button" type="button" onClick={() => void store.signOut()}>
-            Sign out
-          </button>
-        </div>
-      </section>
-      <p
-        role="status"
-        aria-label="Workspace connection"
-        className={`connection-status ${activity}`}
-      >
-        {!canQuery
-          ? "Live updates are paused until your session reconnects."
-          : activity === "offline"
-            ? "You’re offline. Live updates are paused; unsaved drafts stay in this workspace. Reconnect before saving."
-            : activity === "hidden"
-              ? "Live updates are paused while this tab is in the background."
-              : "Live updates · changes appear automatically"}
-      </p>
+      {(!canQuery || activity !== "active") && (
+        <p
+          role="status"
+          aria-label="Workspace connection"
+          className={`connection-status ${!canQuery ? "offline" : activity}`}
+        >
+          {!canQuery
+            ? "Live updates are paused until your session reconnects."
+            : activity === "offline"
+              ? "You’re offline. Live updates are paused; unsaved drafts stay in this workspace. Reconnect before saving."
+              : "Live updates are paused while this tab is in the background."}
+        </p>
+      )}
       <DraftProvider
         key={`${session.user?.id}:${[...(session.user?.roles ?? [])].sort().join(",")}:${role}:${sessionId ?? ""}:${questionId ?? ""}`}
       >
@@ -117,6 +93,11 @@ export function Workspace({
           </p>
         )}
       </DraftProvider>
+      {canQuery && activity === "active" && (
+        <p role="status" aria-label="Workspace connection" className="connection-status active">
+          Live updates · changes appear automatically
+        </p>
+      )}
     </main>
   );
 }
