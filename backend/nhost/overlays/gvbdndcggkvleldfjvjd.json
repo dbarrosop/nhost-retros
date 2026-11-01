@@ -1,7 +1,12 @@
 [
   {
+    "value": "https://retros.nhost.app/oauth2/login",
+    "op": "replace",
+    "path": "/auth/oauth2Provider/loginURL"
+  },
+  {
     "op": "remove",
-    "path": "/auth/redirections/allowedUrls/0"
+    "path": "/auth/redirections/allowedUrls"
   },
   {
     "value": "https://retros.nhost.app",
