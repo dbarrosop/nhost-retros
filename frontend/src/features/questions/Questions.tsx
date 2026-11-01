@@ -3,10 +3,10 @@ import { useState } from "react";
 import { ActionIcon, IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
 import type { AppRole } from "../../lib/retro-api";
-import { Answers } from "../answers/Answers";
 import type { Question } from "../sessions/api";
 import { ConfirmAction, TextForm, useChange } from "../sessions/controls";
 import { addQuestion, deleteQuestion, editQuestion } from "./api";
+import { ParticipantQuestions } from "./ParticipantQuestions";
 
 export function Questions({
   questions,
@@ -25,6 +25,8 @@ export function Questions({
   const drafts = useDrafts();
   const [dirty, setDirty] = useState(() => Boolean(drafts?.get("New question")));
   const locked = ended || readOnly;
+  if (role === "user")
+    return <ParticipantQuestions questions={questions} ended={ended} readOnly={readOnly} />;
   return (
     <section className="questions-section" aria-labelledby="questions-title">
       <div className="section-heading">
@@ -173,9 +175,6 @@ function QuestionItem({
               finishEdit();
             }}
           />
-        )}
-        {role === "user" && (
-          <Answers questionId={question.id} number={number} ended={ended} readOnly={readOnly} />
         )}
       </div>
     </li>

@@ -129,6 +129,8 @@ const facilitatorRoute = createRoute({
 const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sessions/$sessionId",
+  validateSearch: (search: Record<string, unknown>): { question?: string } =>
+    typeof search.question === "string" ? { question: search.question } : {},
   component: () => <Workspace sessionId={sessionRoute.useParams().sessionId} />,
 });
 const facilitatorSessionRoute = createRoute({

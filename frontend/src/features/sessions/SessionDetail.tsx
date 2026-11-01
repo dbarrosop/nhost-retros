@@ -21,7 +21,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
     document.getElementById("session-title")?.focus();
   };
   return (
-    <>
+    <div className={role === "user" ? "participant-session" : undefined}>
       <Link className="quiet-link" to={role === "facilitator" ? "/facilitate" : "/workspace"}>
         ← All retrospectives
       </Link>
@@ -100,7 +100,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
                 ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only."
                 : role === "facilitator"
                   ? "Manage questions below. Open a board to explore your team’s reflections."
-                  : "Take a moment to reflect on the questions below."}
+                  : "Reflect at your own pace. Add a card for each thought."}
             </p>
           </div>
           {renaming && (
@@ -142,6 +142,6 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
           />
         </>
       )}
-    </>
+    </div>
   );
 }

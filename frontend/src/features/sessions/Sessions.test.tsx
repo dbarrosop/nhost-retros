@@ -10,10 +10,33 @@ import { AuthProvider } from "../../lib/auth";
 import { AuthStore } from "../../lib/auth-store";
 import { createQueryClient } from "../../lib/query-client";
 import { createAppRouter } from "../../router";
+import type { Answer } from "../answers/api";
+import type { Question } from "./api";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const questionId = "22222222-2222-4222-8222-222222222222";
-function setup(facilitator: boolean, path: string, withCard = false, withEndedSession = false) {
+const reflectionQuestions: [Question, Question, Question] = [
+  { id: questionId, sessionId, text: "What helped?", createdAt: "2026-10-01T00:00:00Z" },
+  {
+    id: "33333333-3333-4333-8333-333333333333",
+    sessionId,
+    text: "What got in the way?",
+    createdAt: "2026-10-02T00:00:00Z",
+  },
+  {
+    id: "44444444-4444-4444-8444-444444444444",
+    sessionId,
+    text: "What should we try next?",
+    createdAt: "2026-10-03T00:00:00Z",
+  },
+];
+function setup(
+  facilitator: boolean,
+  path: string,
+  withCard = false,
+  withEndedSession = false,
+  initialQuestions = reflectionQuestions.slice(0, 1),
+) {
   const client = createNhostClient({ storage: new MemoryStorage(), configure: [] });
   const session: Session = {
     accessToken: `e30.${btoa(JSON.stringify({ sub: "test", exp: Date.now() / 1000 + 900 }))}.test`,
@@ -49,6 +72,19 @@ function setup(facilitator: boolean, path: string, withCard = false, withEndedSe
   let failedRead = false;
   let failedSessionRead = false;
   let name = "October retrospective";
+  let questions = initialQuestions;
+  let mutationGate: Promise<void> | undefined;
+  const answers = new Map<string, Answer[]>();
+  if (withCard)
+    answers.set(questionId, [
+      {
+        id: "answer",
+        questionId,
+        text: "A saved card",
+        createdAt: "2026-10-01",
+        updatedAt: "2026-10-01",
+      },
+    ]);
   const roles: string[] = [];
   const requests: { query: string; variables: Record<string, string> }[] = [];
   vi.stubGlobal(
@@ -62,19 +98,33 @@ function setup(facilitator: boolean, path: string, withCard = false, withEndedSe
         name,
         ended,
         createdAt: "2026-10-01T00:00:00Z",
-        questions: [
-          { id: questionId, sessionId, text: "What helped?", createdAt: "2026-10-01T00:00:00Z" },
-        ],
+        questions,
       };
       if (body.query.includes("mutation")) {
+        await mutationGate;
         if (body.query.includes("RenameSession") && affected) name = body.variables.name;
-        const field = body.query.includes("CreateSession")
-          ? "insertRetroSessions"
-          : body.query.includes("RenameSession")
-            ? "updateRetroSessions"
-            : body.query.includes("EditQuestion")
-              ? "updateRetroQuestions"
-              : "insertRetroQuestions";
+        if (body.query.includes("AddAnswer") && affected) {
+          const saved = answers.get(body.variables.questionId) ?? [];
+          answers.set(body.variables.questionId, [
+            ...saved,
+            {
+              id: `answer-${saved.length + 1}`,
+              questionId: body.variables.questionId,
+              text: body.variables.text,
+              createdAt: "2026-10-01",
+              updatedAt: "2026-10-01",
+            },
+          ]);
+        }
+        const field = body.query.includes("AddAnswer")
+          ? "insertRetroAnswers"
+          : body.query.includes("CreateSession")
+            ? "insertRetroSessions"
+            : body.query.includes("RenameSession")
+              ? "updateRetroSessions"
+              : body.query.includes("EditQuestion")
+                ? "updateRetroQuestions"
+                : "insertRetroQuestions";
         return Response.json({ data: { [field]: { affected_rows: affected } } });
       }
       return failedRead || (failedSessionRead && body.query.includes("query Session("))
@@ -82,17 +132,7 @@ function setup(facilitator: boolean, path: string, withCard = false, withEndedSe
         : Response.json({
             data: body.query.includes("MyAnswers")
               ? {
-                  retroAnswers: withCard
-                    ? [
-                        {
-                          id: "answer",
-                          questionId,
-                          text: "A saved card",
-                          createdAt: "2026-10-01",
-                          updatedAt: "2026-10-01",
-                        },
-                      ]
-                    : [],
+                  retroAnswers: answers.get(body.variables.questionId) ?? [],
                 }
               : body.query.includes("query QuestionBoard(")
                 ? {
@@ -140,6 +180,16 @@ function setup(facilitator: boolean, path: string, withCard = false, withEndedSe
     requests,
     setEnded: () => {
       ended = true;
+    },
+    setQuestions: (value: Question[]) => {
+      questions = value;
+    },
+    holdMutations: () => {
+      let release = () => {};
+      mutationGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
     },
     zeroRows: () => {
       affected = 0;
@@ -684,6 +734,306 @@ describe("authorized retrospective workspace", () => {
     expect(screen.getByLabelText("New question", { exact: true })).toBeDisabled();
     expect(screen.getByText(/permanently read-only/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "End session" })).not.toBeInTheDocument();
+    app.queries.clear();
+  });
+});
+
+describe("focused participant questions", () => {
+  async function composer(number: number) {
+    const input = await screen.findByLabelText(`New card for question ${number}`, { exact: true });
+    await waitFor(() => expect(input).toBeEnabled());
+    return input;
+  }
+  it("shows one question at a time and keeps new and edited drafts when navigating", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, true, false, reflectionQuestions);
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "What helped?", level: 2 });
+    expect(screen.queryByRole("heading", { name: "What got in the way?" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(
+      app.requests
+        .filter((r) => r.query.includes("query MyAnswers"))
+        .map((r) => r.variables.questionId),
+    ).toEqual([questionId]);
+    await user.type(await composer(1), "First unsaved thought");
+    await user.click(screen.getByRole("button", { name: "Edit card 1 for question 1" }));
+    await user.clear(screen.getByLabelText("Edit card 1 for question 1", { exact: true }));
+    await user.type(
+      screen.getByLabelText("Edit card 1 for question 1", { exact: true }),
+      "An unsaved edit",
+    );
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    const second = await screen.findByRole("heading", { name: "What got in the way?", level: 2 });
+    expect(second).toHaveFocus();
+    expect(
+      screen.queryByRole("heading", { name: "What helped?", level: 2 }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Question 2 of 3", { selector: "summary" })).toBeVisible();
+    await user.type(await composer(2), "Second unsaved thought");
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    expect(await screen.findByLabelText("New card for question 1", { exact: true })).toHaveValue(
+      "First unsaved thought",
+    );
+    expect(screen.getByLabelText("Edit card 1 for question 1", { exact: true })).toHaveValue(
+      "An unsaved edit",
+    );
+    expect(screen.getByText("A saved card")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByLabelText("New card for question 2", { exact: true })).toHaveValue(
+      "Second unsaved thought",
+    );
+    expect(app.requests.some((r) => r.query.includes("mutation"))).toBe(false);
+    app.queries.clear();
+  });
+
+  it("jumps using the shared question chooser and supports browser history", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, false, false, reflectionQuestions);
+    const user = userEvent.setup();
+    const chooser = await screen.findByText("Question 1 of 3", { selector: "summary" });
+    await user.click(chooser);
+    fireEvent.blur(chooser, { relatedTarget: null });
+    expect(chooser.closest("details")).toHaveAttribute("open");
+    const list = screen.getByRole("list", { name: "Questions" });
+    expect(list.closest(".popup-panel")).toBeVisible();
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .filter((option) => option.hasAttribute("aria-current")),
+    ).toHaveLength(1);
+    const third = within(list).getByRole("button", { name: /3\.\s*What should we try next/ });
+    expect(third).toHaveClass("popup-item");
+    await user.click(third);
+    expect(
+      await screen.findByRole("heading", { name: "What should we try next?", level: 2 }),
+    ).toHaveFocus();
+    expect(
+      screen.getByText("Question 3 of 3", { selector: "summary" }).closest("details"),
+    ).not.toHaveAttribute("open");
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    expect(app.router.state.location.search).toEqual({ question: reflectionQuestions[2].id });
+    await act(async () => {
+      app.router.history.back();
+    });
+    expect(await screen.findByRole("heading", { name: "What helped?", level: 2 })).toHaveFocus();
+    await act(async () => {
+      app.router.history.forward();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "What should we try next?", level: 2 }),
+    ).toBeVisible();
+    app.queries.clear();
+  });
+
+  it("selects every question by clicking its label and retains drafts", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, false, false, reflectionQuestions);
+    const user = userEvent.setup();
+    await user.type(await composer(1), "Retain this chooser draft");
+    for (const index of [1, 2, 0]) {
+      await user.click(screen.getByText(/Question \d of 3/, { selector: "summary" }));
+      const list = screen.getByRole("list", { name: "Questions" });
+      const question = reflectionQuestions[index];
+      if (!question) throw new Error("Missing test question");
+      const label = within(list).getByText(question.text, { exact: true });
+      await user.hover(label);
+      await user.click(label);
+      expect(await screen.findByRole("heading", { name: question.text, level: 2 })).toHaveFocus();
+      expect(app.router.state.location.search).toEqual({ question: question.id });
+      expect(
+        screen.getByText(`Question ${index + 1} of 3`, { selector: "summary" }).closest("details"),
+      ).not.toHaveAttribute("open");
+    }
+    expect(await composer(1)).toHaveValue("Retain this chooser draft");
+    app.queries.clear();
+  });
+
+  it("selects a question with the keyboard and dismisses when reselecting the current one", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, false, false, reflectionQuestions);
+    const user = userEvent.setup();
+    const chooser = await screen.findByText("Question 1 of 3", { selector: "summary" });
+    await user.click(chooser);
+    await user.tab();
+    await user.tab();
+    const second = within(screen.getByRole("list", { name: "Questions" })).getByRole("button", {
+      name: /2\.\s*What got in the way/,
+    });
+    expect(second).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(
+      await screen.findByRole("heading", { name: "What got in the way?", level: 2 }),
+    ).toHaveFocus();
+    const updated = screen.getByText("Question 2 of 3", { selector: "summary" });
+    expect(updated.closest("details")).not.toHaveAttribute("open");
+    await user.click(updated);
+    await user.click(
+      within(screen.getByRole("list", { name: "Questions" })).getByRole("button", {
+        name: /2\.\s*What got in the way/,
+      }),
+    );
+    expect(updated.closest("details")).not.toHaveAttribute("open");
+    expect(updated).toHaveFocus();
+    expect(app.router.state.location.search).toEqual({ question: reflectionQuestions[1].id });
+    app.queries.clear();
+  });
+
+  it("saves individual cards without auto-advancing and blocks navigation during a save", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, false, false, reflectionQuestions);
+    const user = userEvent.setup();
+    const input = await screen.findByLabelText("New card for question 1", { exact: true });
+    await waitFor(() => expect(input).toBeEnabled());
+    await user.type(input, "One saved thought");
+    const release = app.holdMutations();
+    await user.click(screen.getByRole("button", { name: "Add card to question 1" }));
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    await user.click(screen.getByText("Question 1 of 3", { selector: "summary" }));
+    const option = within(screen.getByRole("list", { name: "Questions" })).getByRole("button", {
+      name: /2\.\s*What got in the way/,
+    });
+    expect(option).toBeDisabled();
+    await user.click(option);
+    expect(app.router.state.location.search).toEqual({});
+    await act(async () => {
+      release();
+    });
+    expect(await screen.findByText("One saved thought")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "What helped?", level: 2 })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Next" })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(await screen.findByRole("button", { name: "Previous" }));
+    expect(await screen.findByText("One saved thought")).toBeVisible();
+    expect(app.roles.every((role) => role === "user")).toBe(true);
+    app.queries.clear();
+  });
+
+  it("restores the selected question and its drafts after reconnection", async () => {
+    const app = setup(
+      false,
+      `/sessions/${sessionId}?question=${reflectionQuestions[1].id}`,
+      false,
+      false,
+      reflectionQuestions,
+    );
+    const user = userEvent.setup();
+    await user.type(await composer(2), "Keep this second-question draft");
+    const refresh = vi
+      .mocked(app.client.auth.refreshToken)
+      .mockRejectedValue(new TypeError("Offline"));
+    const now = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1_000_000);
+    await act(async () => {
+      await app.store.refresh();
+    });
+    expect(
+      screen.queryByLabelText("New card for question 2", { exact: true }),
+    ).not.toBeInTheDocument();
+    now.mockRestore();
+    refresh.mockResolvedValue({ body: app.session, status: 200, headers: new Headers() });
+    await act(async () => {
+      await app.store.refresh();
+    });
+    expect(await screen.findByLabelText("New card for question 2", { exact: true })).toHaveValue(
+      "Keep this second-question draft",
+    );
+    expect(screen.getByText("Question 2 of 3", { selector: "summary" })).toBeVisible();
+    app.queries.clear();
+  });
+
+  it("keeps question identity through live updates and falls back safely if it is removed", async () => {
+    const app = setup(
+      false,
+      `/sessions/${sessionId}?question=${reflectionQuestions[1].id}`,
+      false,
+      false,
+      reflectionQuestions,
+    );
+    const user = userEvent.setup();
+    const input = await composer(2);
+    await user.type(input, "An undisturbed draft");
+    app.setQuestions([reflectionQuestions[2], reflectionQuestions[0], reflectionQuestions[1]]);
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Question 3 of 3", { selector: "summary" })).toBeVisible(),
+    );
+    expect(input).toHaveValue("An undisturbed draft");
+    expect(input).toHaveFocus();
+    app.setQuestions([reflectionQuestions[2], reflectionQuestions[0]]);
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "What should we try next?", level: 2 }),
+    ).toBeVisible();
+    expect(screen.getByText(/That question is no longer available/)).toBeVisible();
+    expect(screen.getByText("Question 1 of 2", { selector: "summary" })).toBeVisible();
+    app.setQuestions([]);
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(await screen.findByRole("heading", { name: "No questions yet" })).toHaveFocus();
+    expect(
+      screen.queryByRole("navigation", { name: "Question navigation" }),
+    ).not.toBeInTheDocument();
+    app.queries.clear();
+  });
+
+  it("retains hidden drafts as read-only when the retrospective ends", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, false, false, reflectionQuestions);
+    const user = userEvent.setup();
+    await user.type(await composer(1), "First draft before closure");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(await composer(2), "Second draft before closure");
+    app.setEnded();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("New card for question 2", { exact: true })).toBeDisabled(),
+    );
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    const first = await screen.findByLabelText("New card for question 1", { exact: true });
+    expect(first).toHaveValue("First draft before closure");
+    expect(first).toBeDisabled();
+    expect(screen.getByText("Read-only", { exact: true })).toBeVisible();
+    app.queries.clear();
+  });
+
+  it("never queries an unknown question from a shared URL", async () => {
+    const unknown = "99999999-9999-4999-8999-999999999999";
+    const app = setup(
+      false,
+      `/sessions/${sessionId}?question=${unknown}`,
+      false,
+      false,
+      reflectionQuestions,
+    );
+    await screen.findByRole("heading", { name: "What helped?", level: 2 });
+    await screen.findByLabelText("New card for question 1", { exact: true });
+    expect(screen.getByText(/That question is no longer available/)).toBeVisible();
+    expect(
+      app.requests
+        .filter((r) => r.query.includes("query MyAnswers"))
+        .every((r) => r.variables.questionId === questionId),
+    ).toBe(true);
+    app.queries.clear();
+  });
+
+  it("handles a single question without a misleading next step", async () => {
+    const app = setup(false, `/sessions/${sessionId}`);
+    await screen.findByText("Question 1 of 1", { selector: "summary" });
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    app.queries.clear();
+  });
+
+  it("leaves the facilitator question overview unchanged", async () => {
+    const app = setup(true, `/facilitate/${sessionId}`, false, false, reflectionQuestions);
+    for (const question of reflectionQuestions)
+      expect(await screen.findByRole("heading", { name: question.text })).toBeVisible();
+    expect(screen.getAllByRole("link", { name: /Open board for question/ })).toHaveLength(3);
+    expect(
+      screen.queryByRole("navigation", { name: "Question navigation" }),
+    ).not.toBeInTheDocument();
+    expect(app.requests.some((r) => r.query.includes("query MyAnswers"))).toBe(false);
     app.queries.clear();
   });
 });

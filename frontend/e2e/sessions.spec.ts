@@ -59,10 +59,10 @@ test("participants browse; trusted facilitators manage questions and permanently
     await facilitatorView.hover();
     await page.mouse.down();
     try {
-      // A null focus target during a pointer gesture must not hide its link
-      // before mouse-up can dispatch the click that performs navigation.
-      await page.evaluate(() => {
-        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      // Even an outside focus target during a pointer press must not hide
+      // the link before mouse-up can dispatch its navigation click.
+      await page.getByRole("main").evaluate((element) => {
+        if (element instanceof HTMLElement) element.focus({ preventScroll: true });
       });
       await expect(facilitatorView).toBeVisible();
     } finally {

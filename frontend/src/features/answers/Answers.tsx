@@ -37,9 +37,9 @@ export function Answers({
       className="answers-section"
       aria-label={`Your reflection cards for question ${number}`}
     >
-      <h4 ref={heading} id={`answers-${questionId}`} tabIndex={-1}>
+      <h3 ref={heading} id={`answers-${questionId}`} tabIndex={-1}>
         Your reflection cards
-      </h4>
+      </h3>
       <p className="field-hint">
         Only you and trusted facilitators can read your cards. Add a separate card for each thought.
       </p>
@@ -114,9 +114,9 @@ function AnswerCard({
   return (
     <article className="answer-card" aria-labelledby={`card-${answer.id}`}>
       <header className="title-row answer-card-header">
-        <h5 ref={heading} id={`card-${answer.id}`} tabIndex={-1}>
+        <h4 ref={heading} id={`card-${answer.id}`} tabIndex={-1}>
           Card {number}
-        </h5>
+        </h4>
         {!locked && (
           <fieldset className="title-actions" aria-label={`Actions for ${label}`}>
             {!editing && (

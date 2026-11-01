@@ -7,45 +7,70 @@ export function HeaderMenu({
 }: {
   className: string;
   summary: ReactNode;
-  children: ReactNode;
+  children: ReactNode | ((close: () => void) => ReactNode);
 }) {
   const menu = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLElement>(null);
+  const pointerPress = useRef(false);
+  const close = () => {
+    pointerPress.current = false;
+    if (menu.current) menu.current.open = false;
+    trigger.current?.focus();
+  };
 
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
-      if (menu.current && !menu.current.contains(event.target as Node)) menu.current.open = false;
+      if (menu.current && !menu.current.contains(event.target as Node)) {
+        pointerPress.current = false;
+        menu.current.open = false;
+      }
     };
     document.addEventListener("pointerdown", closeOutside);
-    return () => document.removeEventListener("pointerdown", closeOutside);
+    document.addEventListener("pointerup", closeOutside);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("pointerup", closeOutside);
+    };
   }, []);
 
   return (
     <details
       className={`header-menu ${className}`}
       ref={menu}
+      onPointerDownCapture={() => {
+        pointerPress.current = true;
+      }}
+      onPointerCancelCapture={() => {
+        pointerPress.current = false;
+      }}
+      onClickCapture={() => {
+        pointerPress.current = false;
+      }}
       onBlur={(event) => {
-        // A null target can occur before a pointer click activates a menu link.
-        // Keep the link mounted; explicit outside clicks still close the menu.
-        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget))
+        // Browsers can move focus outside while a pointer is pressing an option.
+        // Keep it mounted until click; outside pointer events still dismiss it.
+        if (
+          !pointerPress.current &&
+          event.relatedTarget &&
+          !event.currentTarget.contains(event.relatedTarget)
+        )
           event.currentTarget.open = false;
       }}
       onClick={(event) => {
         if (event.target instanceof Element && event.target.closest("a")) {
-          event.currentTarget.open = false;
-          trigger.current?.focus();
+          close();
         }
       }}
       onKeyDown={(event) => {
+        pointerPress.current = false;
         if (event.key === "Escape" && menu.current?.open) {
           event.preventDefault();
-          menu.current.open = false;
-          trigger.current?.focus();
+          close();
         }
       }}
     >
       <summary ref={trigger}>{summary}</summary>
-      {children}
+      {typeof children === "function" ? children(close) : children}
     </details>
   );
 }

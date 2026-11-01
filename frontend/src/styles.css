@@ -206,6 +206,10 @@ section[tabindex]:focus {
 .popup-item:focus-visible {
   outline-offset: -2px;
 }
+.popup-item[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .header-menu-panel {
   right: 0;
   width: min(20rem, calc(100vw - 2.5rem));
@@ -793,7 +797,7 @@ h3 {
   gap: 0.75rem;
   min-width: 0;
 }
-.title-row > :is(h1, h2, h3, h5) {
+.title-row > :is(h1, h2, h3, h4, h5) {
   flex: 1;
   min-width: 0;
 }
@@ -1352,10 +1356,74 @@ dialog .dialog-description {
   }
 }
 
+.participant-session {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+.participant-session .session-intro {
+  padding-block: 1rem 0.5rem;
+}
+.participant-session .session-title-row h1 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+.participant-questions {
+  margin-top: 1.5rem;
+}
+.question-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.question-chooser-panel {
+  left: 0;
+  width: min(30rem, calc(100vw - 2.5rem));
+  max-height: min(24rem, 60vh);
+  overflow-y: auto;
+}
+.question-chooser-options {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.question-choice {
+  align-items: flex-start;
+}
+.question-choice-number {
+  flex: 0 0 1.3rem;
+  color: var(--muted);
+}
+.question-choice-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.participant-questions > h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.question-pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+.question-draft-hint {
+  margin-top: 0.75rem;
+}
 .answers-section {
   margin-top: 1.75rem;
 }
-.answers-section h4 {
+.answers-section > h3 {
   margin-bottom: 0.6rem;
   font-size: 1rem;
   font-weight: 500;
@@ -1381,7 +1449,7 @@ dialog .dialog-description {
   background: #283538;
   border-color: #4c666c;
 }
-.answer-card h5 {
+.answer-card h4 {
   margin: 0;
   font-size: 0.75rem;
   font-weight: 500;
