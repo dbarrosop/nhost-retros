@@ -86,7 +86,8 @@ started by setup.
 - Eight fictional participants: `avery`, `jordan`, `samira`, `diego`, `mei`, `noah`,
   `imani` and `luca`, all at `@acme.local`.
 - Three retrospectives (two active, one ended), with all nine demo accounts enrolled
-  only when each demo session is first created; replay never restores removals.
+  only when each demo session is first created; replay never restores removed
+  memberships or missing cards for authors who are no longer enrolled.
 - Nine questions, 72 responses,
   19 topics and 54 assignments; 18 cards remain ungrouped.
 
@@ -102,6 +103,8 @@ cannot request facilitator privileges.
 
 The seed is atomic and repeatable. Existing cards, names, account state and group
 moves are not overwritten, and revoked facilitator membership is not restored.
+Missing cards and their assignments are restored only if the author is still
+enrolled in that session; otherwise they are skipped without restoring membership.
 An account-ID/email collision aborts the seed rather than granting a role to the
 wrong person. Tests run it inside rolled-back disposable transactions; they do
 not populate or reset the developer database.

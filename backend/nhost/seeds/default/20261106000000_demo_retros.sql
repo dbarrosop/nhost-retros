@@ -1,7 +1,9 @@
 -- Development-only demo data. Nhost applies this on first local startup or
 -- with `nhost up --apply-seeds`. Do not apply demo accounts to production.
 -- Replays add missing rows without resetting data, overwriting cards or moving
--- existing assignments. Roles are granted only when a demo account is created.
+-- existing assignments. Missing cards are restored only for currently enrolled
+-- authors; removed memberships are never restored.
+-- Roles are granted only when a demo account is created.
 -- No passwords, JWTs, shared credentials or disabled database triggers.
 DO $seed$
 DECLARE
@@ -163,7 +165,9 @@ BEGIN
     ('acde3000-0000-4000-8000-000000000072'::uuid, 'acde2000-0000-4000-8000-000000000009'::uuid, 'acde0000-0000-4000-8000-000000000009'::uuid, 'Prepare a fallback plan for the external dependency.', 8)
   ) AS demo(id, question_id, author_id, text, position)
   JOIN public.retro_questions parent ON parent.id=demo.question_id
-  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answers existing WHERE existing.id=demo.id);
+  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answers existing WHERE existing.id=demo.id)
+    AND EXISTS (SELECT 1 FROM public.retro_session_participants p
+      WHERE p.session_id=parent.session_id AND p.user_id=demo.author_id);
 
   INSERT INTO public.retro_topics(id, question_id, name)
   SELECT demo.id, demo.question_id, demo.name FROM (VALUES
@@ -246,7 +250,8 @@ BEGIN
     ('acde3000-0000-4000-8000-000000000069'::uuid, 'acde2000-0000-4000-8000-000000000009'::uuid, 'acde4000-0000-4000-8000-000000000017'::uuid),
     ('acde3000-0000-4000-8000-000000000070'::uuid, 'acde2000-0000-4000-8000-000000000009'::uuid, 'acde4000-0000-4000-8000-000000000018'::uuid)
   ) AS demo(answer_id, question_id, topic_id)
-  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answer_topics existing WHERE existing.answer_id=demo.answer_id);
+  WHERE NOT EXISTS (SELECT 1 FROM public.retro_answer_topics existing WHERE existing.answer_id=demo.answer_id)
+    AND EXISTS (SELECT 1 FROM public.retro_answers existing WHERE existing.id=demo.answer_id);
 
   -- Close one historical session only after its content is complete. Its cards
   -- remain frozen, while facilitator grouping continues to work as usual.

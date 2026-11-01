@@ -161,6 +161,26 @@ describe("local retrospective demo seed", () => {
     expect(await snapshot()).toEqual(edited);
   });
 
+  it("restores missing cards only for authors still enrolled in the session", async () => {
+    await db.query(seed);
+    const initial = await snapshot();
+    await db.query("DELETE FROM retro_answers WHERE id IN ($1,$2)", [id(3, 25), id(3, 26)]);
+    await db.query("DELETE FROM retro_session_participants WHERE session_id=$1 AND user_id=$2", [
+      id(1, 2),
+      id(0, 2),
+    ]);
+
+    await db.query(seed);
+    expect(await snapshot()).toEqual({
+      ...initial,
+      participants: initial.participants.filter(
+        (participant) => participant.session_id !== id(1, 2) || participant.user_id !== id(0, 2),
+      ),
+      answers: initial.answers.filter((answer) => answer.id !== id(3, 25)),
+      assignments: initial.assignments.filter((assignment) => assignment.answer_id !== id(3, 25)),
+    });
+  });
+
   it("fails atomically if a demo account ID belongs to another email", async () => {
     await db.query(
       "INSERT INTO auth.users(id,email,locale,default_role) VALUES($1,'existing@example.com','en','user')",
