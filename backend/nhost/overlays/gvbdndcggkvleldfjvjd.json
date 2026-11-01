@@ -1,0 +1,16 @@
+[
+  {
+    "op": "remove",
+    "path": "/auth/redirections/allowedUrls/0"
+  },
+  {
+    "value": "https://retros.nhost.app",
+    "op": "replace",
+    "path": "/auth/redirections/clientUrl"
+  },
+  {
+    "value": "nhost.io",
+    "op": "add",
+    "path": "/auth/user/emailDomains/allowed/-"
+  }
+]
