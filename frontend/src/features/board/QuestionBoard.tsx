@@ -323,12 +323,16 @@ export function BoardWorkspace({
             const cards = visibleAnswers.filter(
               (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
             );
+            const totalCount = board.answers.filter(
+              (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
+            ).length;
             return (
               <TopicColumn
                 key={column.id}
                 id={column.id}
                 topic={topic}
                 count={cards.length}
+                totalCount={totalCount}
                 busy={busy || !!dragging}
                 onRename={(name) =>
                   change(renameTopic, { id: column.id, name }, "updateRetroTopics")

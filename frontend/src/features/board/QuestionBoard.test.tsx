@@ -153,6 +153,12 @@ describe("facilitator reflection board", () => {
         ...original.answers,
         {
           ...first,
+          id: "alice-topic-answer",
+          text: "Alice’s topic reflection",
+          assignment: { topicId: "keep" },
+        },
+        {
+          ...first,
           id: "bob-answer",
           text: "Bob’s reflection",
           author: { id: "bob", displayName: "Bob", email: "bob@example.com" },
@@ -167,18 +173,42 @@ describe("facilitator reflection board", () => {
     await user.selectOptions(screen.getByLabelText("Filter responses by participant"), "bob");
     expect(screen.queryByText("Make room for focused work")).not.toBeInTheDocument();
     expect(screen.getByText("Bob’s reflection")).toBeVisible();
-    expect(screen.getByText("1 of 2 cards")).toBeVisible();
+    expect(screen.queryByText("Alice’s topic reflection")).not.toBeInTheDocument();
+    expect(screen.getByText("1 of 3 cards")).toBeVisible();
+    const keep = within(screen.getByRole("region", { name: "Keep" }));
+    const ungrouped = within(screen.getByRole("region", { name: "Ungrouped" }));
+    const improve = within(screen.getByRole("region", { name: "Improve" }));
+    expect(keep.getAllByRole("article")).toHaveLength(1);
+    expect(keep.getByText("1 of 2")).toHaveTextContent("1 of 2 cards");
+    expect(ungrouped.getByText("0 of 1")).toHaveTextContent("0 of 1 card");
     expect(
-      within(screen.getByRole("region", { name: "Keep" })).getAllByRole("article"),
-    ).toHaveLength(1);
-    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 2 to" }), "improve");
+      ungrouped.getByText("No cards from this participant here (1 hidden by the filter)."),
+    ).toBeVisible();
+    expect(ungrouped.queryByText("All reflections have a place.")).not.toBeInTheDocument();
+    expect(improve.getByText("0", { exact: true })).toHaveTextContent("0 cards");
+    expect(improve.getByText("Move a card here to start a theme.")).toBeVisible();
+    expect(keep.getByRole("button", { name: "Rename topic Keep" })).toBeEnabled();
+    await user.click(keep.getByRole("button", { name: "Delete topic Keep" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("2 cards will move to Ungrouped.");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Move card 3 to" }), "improve");
     await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Move card 2 to" })).toHaveValue("improve"),
+      expect(screen.getByRole("combobox", { name: "Move card 3 to" })).toHaveValue("improve"),
     );
+    expect(keep.getByText("0 of 1")).toHaveTextContent("0 of 1 card");
+    expect(
+      keep.getByText("No cards from this participant here (1 hidden by the filter)."),
+    ).toBeVisible();
+    expect(keep.queryByText("Move a card here to start a theme.")).not.toBeInTheDocument();
     expect(app.current().answers[0]?.assignment).toBeNull();
+    expect(app.current().answers[1]?.assignment?.topicId).toBe("keep");
     await user.selectOptions(screen.getByLabelText("Filter responses by participant"), "");
-    expect(screen.getAllByRole("article")).toHaveLength(2);
-    expect(screen.getByText("2 of 2 cards")).toBeVisible();
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    expect(screen.getByText("3 of 3 cards")).toBeVisible();
+    for (const column of [keep, ungrouped, improve]) {
+      expect(column.getByText("1", { exact: true })).toHaveTextContent("1 card");
+      expect(column.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
+    }
     app.queries.clear();
   });
   it("discards an abandoned rename when its toggle closes the editor", async () => {
@@ -259,6 +289,7 @@ describe("facilitator reflection board", () => {
       expect(screen.getByRole("combobox", { name: "Move card 1 to" })).toHaveValue("new"),
     );
     await user.click(screen.getByRole("button", { name: "Delete topic Small wins" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("1 card will move to Ungrouped.");
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(app.current().topics.some((t) => t.name === "Small wins")).toBe(true);
     await user.click(screen.getByRole("button", { name: "Delete topic Small wins" }));

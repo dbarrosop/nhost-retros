@@ -548,5 +548,8 @@
   survive removal. Enrollment stays editable after ending, without changing the
   content freeze. The facilitator board filters displayed cards/counts by author
   across all topics, includes former participants with retained responses, and
-  keeps card numbering/grouping IDs stable. The filter cannot change mid-drag or
-  during a pending grouping write.
+  keeps card numbering/grouping IDs stable. Columns with hidden cards show visible
+  and total counts, and a hidden-only column explains the filter instead of claiming
+  the topic or Ungrouped is empty. Topic deletion stays available and its confirmation
+  counts all cards that will move, not just visible cards. The filter cannot change
+  mid-drag or during a pending grouping write.

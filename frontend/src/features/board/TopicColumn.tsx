@@ -8,6 +8,7 @@ export function TopicColumn({
   id,
   topic,
   count,
+  totalCount,
   busy,
   onRename,
   onDelete,
@@ -16,6 +17,7 @@ export function TopicColumn({
   id: string;
   topic?: Topic;
   count: number;
+  totalCount: number;
   busy: boolean;
   onRename: (name: string) => Promise<unknown>;
   onDelete: () => Promise<unknown>;
@@ -46,8 +48,8 @@ export function TopicColumn({
             {name}
           </h2>
           <span className="topic-count">
-            {count}
-            <span className="sr-only">{count === 1 ? " card" : " cards"}</span>
+            {count === totalCount ? count : `${count} of ${totalCount}`}
+            <span className="sr-only">{totalCount === 1 ? " card" : " cards"}</span>
           </span>
         </div>
         {topic ? (
@@ -68,7 +70,7 @@ export function TopicColumn({
             <ConfirmAction
               label={`Delete topic ${name}`}
               title={`Delete topic “${name}”?`}
-              description="The cards will move to Ungrouped. No answer content or authorship will be deleted. This cannot be undone."
+              description={`${totalCount} ${totalCount === 1 ? "card" : "cards"} will move to Ungrouped. No answer content or authorship will be deleted. This cannot be undone.`}
               disabled={busy}
               failureMessage={groupingFailed}
               onConfirm={onDelete}
@@ -103,7 +105,11 @@ export function TopicColumn({
         {children}
         {count === 0 && (
           <p className="column-empty">
-            {topic ? "Move a card here to start a theme." : "All reflections have a place."}
+            {totalCount > 0
+              ? `No cards from this participant here (${totalCount} hidden by the filter).`
+              : topic
+                ? "Move a card here to start a theme."
+                : "All reflections have a place."}
           </p>
         )}
       </div>
