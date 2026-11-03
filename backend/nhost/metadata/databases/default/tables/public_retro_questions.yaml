@@ -26,6 +26,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: session_id
 array_relationships:
+  - name: followUps
+    using:
+      foreign_key_constraint_on:
+        column: question_id
+        table:
+          name: retro_follow_ups
+          schema: public
   - name: answers
     using:
       foreign_key_constraint_on:
@@ -151,3 +158,5 @@ delete_permissions:
                     _eq: false
           - _not:
               answers: {}
+          - _not:
+              followUps: {}

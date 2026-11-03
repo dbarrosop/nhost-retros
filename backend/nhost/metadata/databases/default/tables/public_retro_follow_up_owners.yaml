@@ -1,0 +1,40 @@
+table:
+  name: retro_follow_up_owners
+  schema: public
+configuration:
+  column_config:
+    display_name:
+      custom_name: displayName
+  custom_column_names:
+    display_name: displayName
+  custom_name: retroFollowUpOwners
+  custom_root_fields:
+    select: retroFollowUpOwners
+    select_aggregate: retroFollowUpOwnersAggregate
+array_relationships:
+  - name: followUps
+    using:
+      manual_configuration:
+        column_mapping:
+          id: owner_id
+        insertion_order: null
+        remote_table:
+          name: retro_follow_ups
+          schema: public
+select_permissions:
+  - role: facilitator
+    permission:
+      columns:
+        - id
+        - display_name
+        - email
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true

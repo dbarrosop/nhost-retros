@@ -201,3 +201,22 @@ Final combined validation also passed lint, TypeScript checks, all 160 unit test
 the production build and all 22 backend integration tests (including the three
 seed cases). The six-migration scratch up/down/up check passed earlier in this
 change. Browser acceptance remains blocked solely by the occupied frontend port.
+
+## Question follow-ups validation
+
+Local checks for facilitator-managed follow-ups passed on the registered disposable
+stack; the developer backend was not migrated, reset or used for fixtures.
+
+- Lint, both TypeScript workspaces, 153 frontend tests, 81 backend unit tests and
+  the production frontend build passed.
+- All eight application migrations passed scratch Auth baseline/up/down/up.
+- All 28 backend integration tests passed, including the exact follow-up board and
+  summary documents against both Hasura and Constellation with real JWTs. New cases
+  cover participant/schema isolation, live role revocation, owner eligibility and
+  removal races, retained owners, action/link constraints, immutable identity,
+  restrictive question deletion and post-end CRUD.
+- All 18 desktop/mobile browser journeys passed on Constellation. New follow-up
+  journeys exercise creation without a ticket, owner reassignment, ticket linking,
+  session summaries, post-end creation/edit/deletion, retained removed owners,
+  participant non-exposure, viewport fit and axe serious/critical checks.
+- The full Hasura browser suite and hosted CI were not rerun for this change.

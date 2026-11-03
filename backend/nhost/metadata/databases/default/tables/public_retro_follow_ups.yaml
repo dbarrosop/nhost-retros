@@ -1,0 +1,120 @@
+table:
+  name: retro_follow_ups
+  schema: public
+configuration:
+  column_config:
+    created_at:
+      custom_name: createdAt
+    owner_id:
+      custom_name: ownerId
+    ticket_url:
+      custom_name: ticketUrl
+    question_id:
+      custom_name: questionId
+  custom_column_names:
+    created_at: createdAt
+    question_id: questionId
+    owner_id: ownerId
+    ticket_url: ticketUrl
+  custom_name: retroFollowUps
+  custom_root_fields:
+    delete: deleteRetroFollowUps
+    delete_by_pk: deleteRetroFollowUp
+    insert: insertRetroFollowUps
+    insert_one: insertRetroFollowUp
+    select: retroFollowUps
+    select_aggregate: retroFollowUpsAggregate
+    select_by_pk: retroFollowUp
+    update: updateRetroFollowUps
+    update_by_pk: updateRetroFollowUp
+object_relationships:
+  - name: question
+    using:
+      foreign_key_constraint_on: question_id
+  - name: owner
+    using:
+      manual_configuration:
+        column_mapping:
+          owner_id: id
+        insertion_order: null
+        remote_table:
+          name: retro_follow_up_owners
+          schema: public
+insert_permissions:
+  - role: facilitator
+    permission:
+      check:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
+      columns:
+        - question_id
+        - action
+        - owner_id
+        - ticket_url
+select_permissions:
+  - role: facilitator
+    permission:
+      columns:
+        - id
+        - question_id
+        - action
+        - owner_id
+        - ticket_url
+        - created_at
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
+update_permissions:
+  - role: facilitator
+    permission:
+      columns:
+        - action
+        - owner_id
+        - ticket_url
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
+      check:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true
+delete_permissions:
+  - role: facilitator
+    permission:
+      filter:
+        _exists:
+          _table:
+            name: retro_eligible_users
+            schema: public
+          _where:
+            id:
+              _eq: X-Hasura-User-Id
+            is_facilitator:
+              _eq: true

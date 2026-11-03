@@ -20,9 +20,16 @@ no password UI exists. Facilitators open a per-question reflection board with
 author-labelled cards, named topics, mouse/touch/keyboard dragging and a Move-to
 menu on every card, plus a participant response filter. Removing a participant
 revokes session/question/own-card access without deleting their responses; retained
-authors remain filterable. Participant management, topic management and grouping stay available after ending;
-facilitators never edit another person’s answer content. Participants cannot enter
-or query this board.
+authors remain filterable. Each question also supports multiple facilitator-managed
+follow-ups: a required action (1–500 characters), one participant owner and an optional
+HTTP(S) ticket link (up to 2,048 characters). A session-level summary collects these
+outcomes with links back to their question boards. New assignments require a current,
+eligible participant; removing an owner preserves existing actions and their identity.
+Questions with follow-ups cannot be deleted until the actions are explicitly removed.
+Participant management, topic management, grouping and follow-up CRUD stay available
+after ending; facilitators never edit another person’s answer content. Participants
+cannot enter or query this board or its follow-ups. Ticket links open the external
+tracker; no ticket creation or status synchronization is performed.
 Welcome prompts remain editorial, not participant content. The welcome screen
 alone needs no backend; accounts and retrospectives need a migrated local stack.
 

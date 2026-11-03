@@ -36,6 +36,7 @@ function setup(
   withCard = false,
   withEndedSession = false,
   initialQuestions = reflectionQuestions.slice(0, 1),
+  withFollowUp = false,
 ) {
   const client = createNhostClient({ storage: new MemoryStorage(), configure: [] });
   const session: Session = {
@@ -98,7 +99,21 @@ function setup(
         name,
         ended,
         createdAt: "2026-10-01T00:00:00Z",
-        questions,
+        questions: questions.map((question) => ({
+          ...question,
+          followUps:
+            withFollowUp && question.id === questionId
+              ? [
+                  {
+                    id: "follow-up",
+                    action: "Publish release notes",
+                    ownerId: "alice",
+                    owner: { id: "alice", displayName: "Alice", email: "alice@example.com" },
+                    ticketUrl: "https://linear.app/acme/issue/ACME-42",
+                  },
+                ]
+              : [],
+        })),
       };
       if (body.query.includes("mutation")) {
         await mutationGate;
@@ -144,21 +159,27 @@ function setup(
                       },
                     ],
                   }
-                : {
-                    retroSessions: [
-                      record,
-                      ...(withEndedSession && body.query.includes("query Sessions")
-                        ? [
-                            {
-                              id: "33333333-3333-4333-8333-333333333333",
-                              name: "September retrospective",
-                              ended: true,
-                              createdAt: "2026-09-01T00:00:00Z",
-                            },
-                          ]
-                        : []),
-                    ],
-                  },
+                : body.query.includes("query QuestionFollowUps(")
+                  ? {
+                      retroQuestions: [
+                        { id: questionId, followUps: [], session: { participants: [] } },
+                      ],
+                    }
+                  : {
+                      retroSessions: [
+                        record,
+                        ...(withEndedSession && body.query.includes("query Sessions")
+                          ? [
+                              {
+                                id: "33333333-3333-4333-8333-333333333333",
+                                name: "September retrospective",
+                                ended: true,
+                                createdAt: "2026-09-01T00:00:00Z",
+                              },
+                            ]
+                          : []),
+                      ],
+                    },
           });
     }),
   );
@@ -440,6 +461,44 @@ describe("authorized retrospective workspace", () => {
     app.queries.clear();
   });
 
+  it("summarizes question follow-ups for facilitators after ending without querying them for participants", async () => {
+    const app = setup(true, `/facilitate/${sessionId}`, false, false, undefined, true);
+    await screen.findByText("Publish release notes");
+    const summary = within(screen.getByRole("region", { name: "Follow-up summary" }));
+    expect(summary.getByText("Owner: Alice (alice@example.com)")).toBeVisible();
+    expect(summary.getByRole("link", { name: "What helped?" })).toHaveAttribute(
+      "href",
+      `/facilitate/${sessionId}/questions/${questionId}`,
+    );
+    app.setEnded();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(summary.getByText("Publish release notes")).toBeVisible();
+    app.queries.clear();
+  });
+  it("does not request or render private follow-ups on the participant route", async () => {
+    const app = setup(false, `/sessions/${sessionId}`);
+    await screen.findByRole("heading", { name: "What helped?" });
+    expect(screen.queryByRole("region", { name: "Follow-up summary" })).not.toBeInTheDocument();
+    expect(app.requests.some((request) => /FollowUps/.test(request.query))).toBe(false);
+    app.queries.clear();
+  });
+  it("keeps follow-up creation available on an ended facilitator board", async () => {
+    const app = setup(true, `/facilitate/${sessionId}/questions/${questionId}`);
+    await screen.findByRole("form", { name: "New follow-up" });
+    app.setEnded();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(await screen.findByText(/themes, grouping and follow-ups remain open/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Add follow-up" })).not.toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(screen.getByRole("form", { name: "New follow-up" })).toBeVisible();
+    app.queries.clear();
+  });
   it.each([
     [false, "/sessions/not-a-uuid", "Session unavailable"],
     [true, "/facilitate/not-a-uuid", "Session unavailable"],

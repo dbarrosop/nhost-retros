@@ -15,6 +15,8 @@
 - "!include public_retro_answer_topics.yaml"
 - "!include public_retro_answers.yaml"
 - "!include public_retro_eligible_users.yaml"
+- "!include public_retro_follow_up_owners.yaml"
+- "!include public_retro_follow_ups.yaml"
 - "!include public_retro_participant_accounts.yaml"
 - "!include public_retro_questions.yaml"
 - "!include public_retro_session_participants.yaml"

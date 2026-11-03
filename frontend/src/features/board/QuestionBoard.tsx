@@ -15,6 +15,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ParticipantAvatar } from "../../components/ParticipantAvatar";
 import { useDrafts } from "../../lib/drafts";
 import { readFailed, requireAffected, useRetroApi, useRetroQuery } from "../../lib/retro-api";
+import { FollowUps } from "../follow-ups/FollowUps";
 import { useSession } from "../sessions/api";
 import { AnswerCard, dragControlId } from "./AnswerCard";
 import {
@@ -111,10 +112,11 @@ export function QuestionBoard({
               Find the themes in your team’s reflections. Only trusted facilitators can see this
               board and its authors.
               {session.ended &&
-                " Answer content is permanently frozen; themes and grouping remain open."}
+                " Answer content is permanently frozen; themes, grouping and follow-ups remain open."}
             </p>
           </div>
           <BoardWorkspace sessionId={sessionId} questionId={questionId} />
+          <FollowUps sessionId={sessionId} questionId={questionId} readOnly={query.isError} />
         </>
       )}
     </>
