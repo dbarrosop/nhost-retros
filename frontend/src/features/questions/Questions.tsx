@@ -139,7 +139,7 @@ function QuestionItem({
                     label={`Delete question ${number}`}
                     icon="delete"
                     title="Delete this question?"
-                    description="Only a question without answers can be deleted. This cannot be undone."
+                    description="Only a question without answers or follow-ups can be deleted. Remove its follow-ups first. This cannot be undone."
                     disabled={change.isPending}
                     onConfirm={async () => {
                       await change.mutateAsync({

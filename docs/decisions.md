@@ -553,3 +553,43 @@
   the topic or Ungrouped is empty. Topic deletion stays available and its confirmation
   counts all cards that will move, not just visible cards. The filter cannot change
   mid-drag or during a pending grouping write.
+
+## Question follow-ups
+
+- **Outcomes, not another task tracker.** A question has zero or more independent
+  follow-ups, each with an action, one accountable account and an optional external
+  ticket URL. Actions use the existing plain-text/Unicode trimming rules and a
+  500-code-point limit. Ticket links are trimmed, limited to 2,048 code points and
+  restricted to ordinary absolute HTTP(S) hosts without credentials, whitespace or
+  backslashes. Blank links become null. There is no local status, ticket creation
+  API or synchronization with the external tracker.
+- **Locale-independent ticket validation.** The forward migration
+  `20261109000000_retro_ticket_url_parity` leaves applied migration checksums intact.
+  Its CHECK uses C collation and explicit ECMAScript whitespace/Unicode control
+  ranges, not locale-dependent POSIX classes. Both layers spell out ASCII case
+  pairs for hosts and HTTP(S) schemes: JavaScript's Unicode `i` flag also accepts
+  long s and Kelvin sign in `[a-z]`. Mixed-case schemes/hosts and Unicode paths
+  remain supported; whitespace, controls and backslashes do not.
+- **Facilitator-only, even after ending.** CRUD and the minimal retained-owner
+  ID/name/email view check live facilitator eligibility. Participants, including a
+  facilitator using the ordinary user role, have no follow-up schema, relationships
+  or aggregates. Question boards provide editing and session pages summarize actions
+  by question. Ending freezes reflections, not follow-ups; these rows never update
+  answers and have no closure predicate.
+- **Assignment is enrollment-aware; retention is not.** Insert/reassignment locks
+  and checks the chosen owner's current session membership and eligibility. Removal
+  winning that lock rejects a stale assignment. Removing an owner does not delete
+  their actions or prevent action/link edits; reassignment must target a current
+  eligible participant. A separate retained-owner view preserves attribution even
+  when the eligible-account picker no longer includes that account. Restrictive
+  question/account foreign keys prevent silent action loss, and question deletion
+  permissions also require no follow-ups. Empty active questions become deletable
+  again after explicit action deletion. Identity, parent and creation time are
+  immutable; the migration creates no actions or memberships for existing sessions.
+- **Preserve unsaved intent and safe navigation.** Editors retain only edited fields
+  in the existing route/account-scoped in-memory draft provider, merging them over
+  the latest server row for display and submission. Untouched fields follow refetches
+  rather than reverting concurrent changes; failed, offline or zero-row writes do not
+  reset edited fields. Read failures pause submission.
+  Deletion requires confirmation and never touches the linked external ticket.
+  Links are revalidated before rendering and open with `noopener noreferrer`.

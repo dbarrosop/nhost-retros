@@ -320,6 +320,34 @@ metadata/application deployment and would restore the old broader read policy.
 The local demo seed enrolls accounts only for newly created demo sessions; rerunning
 it does not enroll pre-existing sessions or restore removed memberships.
 
+### Question follow-ups
+
+`20261108000000_retro_follow_ups` adds facilitator-only question follow-ups and the
+retained-owner identity view `retroFollowUpOwners`; it creates no follow-up rows.
+Apply the migration together with current metadata using the
+[backend-first rollout and pre-publish checks](#static-host-and-backend-first-rollout),
+refreshing Constellation before releasing the frontend. Use `down.sql` only for
+scratch migration roundtrips, never on a live backend.
+
+`20261109000000_retro_ticket_url_parity` replaces only the ticket-link CHECK to
+match the SPA's ASCII host and Unicode whitespace/control rules independently of
+Postgres locale; apply it forward without editing the original migration. It
+validates existing rows and refuses invalid stored links rather than silently
+removing or rewriting them. If validation fails, a facilitator must explicitly
+correct or clear those ticket links before retrying; retain the follow-up actions.
+
+Follow-up reads and CRUD require the explicit `facilitator` role plus live
+eligibility and facilitator membership. Participants have no follow-up or owner
+schema, including the `retroQuestions.followUps` relationship. A new or reassigned
+owner must be a current eligible participant in that question's session. Removing
+an owner preserves existing follow-ups and their attribution; facilitators can
+still edit their action/link or explicitly reassign/delete them. Follow-up CRUD
+remains available after ending, independently of frozen questions and answer cards.
+Follow-ups prevent question deletion until explicitly removed, and their owner
+foreign key blocks account deletion even if the owner never wrote a card. See
+[Rollback and retained accounts](#rollback-and-retained-accounts) before handling
+retention or deletion requests.
+
 ## Auth fixture and rate budgets
 
 Auth accepts any email domain and allows implicit OTP signup. Email verification
@@ -350,11 +378,13 @@ non-email `/signin/email-password` request and reuses `/token` refresh thereafte
 This is test-only, not a password UI. Tokens/passwords stay in process memory;
 no repository token cache, storageState, traces, screenshots or video is written.
 Assertions use sanitized messages instead of comparing secret values. Fixture
-users without answers are removed after checks. Authors retained by answer foreign
-keys are instead disabled, have refresh sessions removed and facilitator membership
-revoked; their cards and author records remain until guarded target destruction. Non-OTP browser journeys seed SDK session storage
-from these in-memory fixtures; only dedicated OTP journeys spend the separate
-email budget. Seed once per browser context, not per tab: the SPA rotates refresh
+users without answers or owned follow-ups are removed after checks. Accounts
+retained by answer-author or follow-up-owner foreign keys are instead disabled,
+have refresh sessions removed and facilitator membership revoked; their cards,
+follow-ups and identity records remain until guarded target destruction.
+Non-OTP browser journeys seed SDK session storage from these in-memory fixtures;
+only dedicated OTP journeys spend the separate email budget. Seed once per browser
+context, not per tab: the SPA rotates refresh
 tokens, so replaying the original token into a later tab invalidates its session.
 No storageState files are written. Mailhog is isolated in this test project, not
 external SMTP.
@@ -518,9 +548,11 @@ and author IDs but cannot edit/delete others’ content. For their own participa
 facilitators must first add themselves under **Participants**, then follow the
 session’s participant link, which sends the ordinary user role. The facilitator
 API additionally exposes IDs, display names and emails through `retroAnswerAuthors`
-for retained-answer authors and `retroParticipantAccounts` for every verified,
-eligible account, used for enrollment whether or not it has answered. Participants
-cannot select or filter by either projection or grouping relationships.
+for retained-answer authors, `retroParticipantAccounts` for every verified,
+eligible account, used for enrollment whether or not it has answered, and
+`retroFollowUpOwners` for retained follow-up owners, including removed participants.
+Participants cannot select or filter by any of these projections or by grouping
+or follow-up relationships.
 
 ### Facilitator grouping API
 
@@ -548,10 +580,16 @@ only `topicId` is updateable, and the same composite integrity constraints apply
 The browser board uses these explicit operations with pending state, authoritative
 refetch and sanitized failure feedback. Topic deletion requires confirmation.
 
-Answer-to-question and answer-to-author foreign keys are intentionally restrictive.
-Deleting an account with retained cards fails, even for a trusted SQL operator;
-there is no content cascade or maintenance bypass. Retention/deletion work needs an
-explicit, backed-up operator procedure, not trigger disabling in routine cleanup.
+Answer-to-question, answer-to-author and follow-up-owner foreign keys are
+intentionally restrictive. Deleting an account with retained cards or owned
+follow-ups fails, even for a trusted SQL operator; there is no content cascade or
+maintenance bypass. Retiring an account keeps both cards and follow-ups attributed.
+Unlike frozen ended cards, follow-ups can be reassigned or deleted even after
+ending; account deletion requires resolving all of its follow-ups and any retained
+answers. Use the explicit, backed-up operator procedure described under
+[Rollback and retained accounts](#rollback-and-retained-accounts), accounting for
+owner identity exposed through `retroFollowUpOwners`, not trigger disabling in
+routine cleanup.
 
 ### Browser harness pitfalls
 
@@ -684,6 +722,18 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    - Also verify two-user private multi-card isolation, denied forged facilitator
      headers and live **facilitator-role** revocation, closure rejecting later content
      writes, and facilitator-only grouping after closure.
+   - Using the `user` role (including a facilitator's ordinary participant route),
+     verify denial of `retroFollowUps`, `retroFollowUpOwners` and
+     `retroQuestions.followUps`, including relationship filters. Follow-up reads and
+     mutations must also lose access immediately after live facilitator revocation
+     with an already-issued JWT.
+   - Verify facilitator follow-up CRUD before and after ending. New or reassigned
+     owners must be current eligible participants in the question's session; reject
+     non-enrolled, removed or ineligible owners. Removing an owner must retain
+     existing actions and owner attribution while allowing action/link edits.
+     On an active question without answers, verify that an existing follow-up blocks
+     question deletion until the follow-up is explicitly deleted. Ending must still
+     freeze questions and cards, not follow-ups.
 
    Ended smoke-test content is intentionally retained. Never log JWTs, OTPs or admin
    responses.
@@ -693,7 +743,12 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    closed-session read-only state and deep-link fallback. Exercise facilitator
    **Participants** add/remove controls and the response-board author filter,
    including retained authors after removal. Verify facilitators must enroll
-   themselves before answering through the ordinary participant route.
+   themselves before answering through the ordinary participant route. Create, edit,
+   reassign and delete facilitator follow-ups on a question board, including the
+   optional ticket link; verify the session-level summary and its links back to
+   question boards. Repeat follow-up CRUD and summary checks after ending, including
+   retained owner attribution after removal, and confirm the participant workspace
+   exposes neither follow-ups nor their owners.
    Inspect browser requests for the expected explicit role and canonical endpoint.
    Stop onboarding on failed authorization or freeze checks; do not mask them by
    switching engines or loosening permissions.
@@ -715,13 +770,24 @@ backup owner, an explicit outage/data-loss decision and a tested recovery plan.
 Application `down.sql` files are exercised only in disposable scratch databases:
 they drop application data and are **not** a production rollback recipe. Role down
 also refuses existing facilitator grants/defaults; never delete grants just to
-force a downgrade through. Preserve the independent grouping/frozen-content
-boundary during any compatible rollback and rerun both-engine smoke checks.
+force a downgrade through. Preserve grouping/follow-up privacy and the independent
+frozen-content boundary during any compatible rollback and rerun both-engine smoke
+checks.
 
-Answer-to-author foreign keys deliberately prevent account deletion once answers
-exist, including privileged SQL deletion. There is no hidden cascade or general
-maintenance bypass. Retire an account by disabling access, revoking refresh
-sessions and facilitator membership without erasing its retained cards. Any
-retention/deletion request requires a separate explicit, backed-up and reviewed
-operator procedure addressing immutable ended content, author identity and legal
-retention; this MVP supplies no account-deletion UI or destructive cleanup tool.
+Answer-author and follow-up-owner foreign keys deliberately prevent account
+deletion while answers or owned follow-ups exist, including privileged SQL deletion.
+An owner need not have written a card to be retained. There is no hidden cascade or
+general maintenance bypass. Retire an account by disabling access, revoking refresh
+sessions and facilitator membership without erasing its retained cards or follow-ups;
+both remain attributed. The facilitator-only `retroFollowUpOwners` projection still
+exposes retained owners' IDs, display names and emails, including after removal
+from a session or account retirement.
+
+Any retention/deletion request requires a separate explicit, backed-up and reviewed
+operator procedure addressing immutable ended content, author and owner identity
+(including `retroFollowUpOwners`) and legal retention. Before deleting an account,
+reassign each owned follow-up to a current eligible participant in its question's
+session or explicitly delete it. Unlike frozen ended cards, follow-ups remain
+mutable and deletable after ending; resolving them does not remove any retained
+answer-author constraint. This MVP supplies no account-deletion UI or destructive
+cleanup tool.

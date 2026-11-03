@@ -326,7 +326,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       ),
     ).toBe(true);
     await page.getByRole("link", { name: "Open board for question 1" }).click();
-    await expect(page.getByText(/themes and grouping remain open/)).toBeVisible();
+    await expect(page.getByText(/themes, grouping and follow-ups remain open/)).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Edit card|Delete card|Edit question|End session/ }),
     ).toHaveCount(0);

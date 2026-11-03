@@ -3,6 +3,7 @@ import { useState } from "react";
 import { IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
 import { type AppRole, readFailed } from "../../lib/retro-api";
+import { FollowUpSummary } from "../follow-ups/FollowUpSummary";
 import { Questions } from "../questions/Questions";
 import { useSession } from "./api";
 import { ConfirmAction, TextForm, useChange } from "./controls";
@@ -140,6 +141,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             readOnly={query.isError}
             role={role}
           />
+          {role === "facilitator" && <FollowUpSummary sessionId={id} />}
         </>
       )}
     </div>

@@ -1134,6 +1134,43 @@ button.primary-link {
   background: #ffffff0c;
   font-size: 0.7rem;
 }
+.follow-ups-section {
+  margin-top: 2.5rem;
+  min-width: 0;
+}
+.follow-up-list {
+  display: grid;
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+.follow-up-card {
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.follow-up-card .title-row {
+  flex-wrap: wrap;
+}
+.follow-up-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.follow-up-action {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.follow-up-ticket {
+  display: inline-block;
+  padding-block: 0.75rem;
+}
+.follow-up-summary-group > h3 {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
 .text-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1161,6 +1198,9 @@ button.primary-link {
 }
 .text-form .action-row {
   margin-top: 0.5rem;
+}
+.follow-up-card .text-form {
+  margin-top: 1rem;
 }
 .session-list,
 .question-list {
