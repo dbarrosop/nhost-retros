@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { Client } from "pg";
 import { describe, expect, it } from "vitest";
-import { type BoardResult, boardQuery } from "../../frontend/src/features/board/api.ts";
+import {
+  type BoardResult,
+  boardQuery,
+  createThemeFromCard,
+} from "../../frontend/src/features/board/api.ts";
 import { setFacilitator } from "../scripts/facilitator.ts";
 import { actor, cleanupActor, newGroup } from "./lib/auth.ts";
 import { blocked, data, denied, gql } from "./lib/retro.ts";
@@ -594,6 +598,98 @@ describe("facilitator-only grouping and minimal author projection", () => {
       await lock.query("ROLLBACK");
       await Promise.all([lock.end(), observer.end()]);
       for (const who of [author, manager]) await cleanupActor(target, who.id);
+    }
+  });
+});
+
+describe("atomic theme creation from a staged card", () => {
+  it("creates and reassigns together, rolls back failures, and preserves closed answer content on both engines", async () => {
+    const target = await guard();
+    const group = await newGroup(target);
+    const participant = await actor(group),
+      manager = await actor(group);
+    const db = await connect(target);
+    try {
+      await setFacilitator(db, manager.id, "grant");
+      await manager.refresh();
+      for (const url of [target.endpoints.hasura, target.endpoints.graphql]) {
+        const current = await seed(db, participant.id);
+        const other = await seed(db, participant.id);
+        const run = (variables: Record<string, unknown>, who = manager, role = "facilitator") =>
+          gql(target, url, who, role, createThemeFromCard, variables);
+        const content = async () =>
+          (await db.query("SELECT * FROM retro_answers WHERE id=$1", [current.answer])).rows;
+        const assignment = async () =>
+          (
+            await db.query("SELECT topic_id FROM retro_answer_topics WHERE answer_id=$1", [
+              current.answer,
+            ])
+          ).rows[0]?.topic_id;
+        const absent = async (name: string) =>
+          expect(
+            Number(
+              (
+                await db.query(
+                  "SELECT count(*) FROM retro_topics WHERE question_id=$1 AND name=$2",
+                  [current.question, name],
+                )
+              ).rows[0].count,
+            ),
+          ).toBe(0);
+        const original = await content();
+        const create = async (name: string) => {
+          const result = data(
+            await run({ questionId: current.question, answerId: current.answer, name }),
+            "createdTheme",
+          ) as { affected_rows: number; returning: { id: string }[] };
+          // Hasura includes nested assignment inserts in affected_rows.
+          expect(result.affected_rows).toBeGreaterThanOrEqual(1);
+          expect(result.returning).toHaveLength(1);
+          const id = result.returning[0]?.id;
+          if (!id) throw new Error("Missing new theme ID");
+          expect(await assignment()).toBe(id);
+          expect(await content()).toEqual(original);
+          return id;
+        };
+        await create("A first staged theme");
+        const moved = await create("A replacement staged theme");
+        // The first mutation field deletes the old assignment. A later failure
+        // must roll that deletion back, rather than leaving the card ungrouped.
+        denied(await run({ questionId: current.question, answerId: current.answer, name: "   " }));
+        expect(await assignment()).toBe(moved);
+        // A nested assignment failure must not leave an empty theme behind.
+        denied(
+          await run({
+            questionId: current.question,
+            answerId: other.answer,
+            name: "Wrong question theme",
+          }),
+        );
+        await absent("Wrong question theme");
+        expect(await assignment()).toBe(moved);
+        denied(
+          await run({
+            questionId: current.question,
+            answerId: randomUUID(),
+            name: "Missing card theme",
+          }),
+        );
+        await absent("Missing card theme");
+        denied(
+          await run(
+            { questionId: current.question, answerId: current.answer, name: "Participant forgery" },
+            participant,
+            "user",
+          ),
+        );
+        await absent("Participant forgery");
+        await db.query("UPDATE retro_sessions SET ended=true WHERE id=$1", [current.session]);
+        await create("A theme after closure");
+      }
+    } finally {
+      await db.end();
+      await cleanupActor(target, participant.id);
+      await cleanupActor(target, manager.id);
     }
   });
 });

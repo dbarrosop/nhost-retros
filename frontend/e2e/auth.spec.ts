@@ -71,8 +71,11 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     await page.clock.setSystemTime(Date.now());
     await fillCode(await latestCode(target, email));
     await page.getByRole("button", { name: "Verify and continue" }).click();
-    await expect(page.getByRole("heading", { name: "Welcome to the team space." })).toBeVisible();
-    await expect(page.getByText("Signed in as a participant.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Retrospectives", level: 1 })).toBeVisible();
+    await expect(page.getByText("Participant view", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Facilitator view", exact: true }),
+    ).not.toBeVisible();
     // A transient restoration failure must not turn a still-valid account into a signed-out UI.
     await page.route(
       `${target.endpoints.auth}/token`,
@@ -80,7 +83,7 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
       { times: 1 },
     );
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Welcome to the team space." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Retrospectives", level: 1 })).toBeVisible();
     await expect(page.getByRole("status", { name: "Session connection" })).toContainText(
       "retry automatically",
     );
@@ -111,10 +114,12 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
       const restoration = await restored;
       expect(restoration.status()).toBe(200);
       await restoration.finished();
+      await other.getByText("Account", { exact: true }).click();
       await expect(other.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
     } finally {
       releaseRotation();
     }
+    await page.getByText("Account", { exact: true }).click();
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     await expect(other.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -124,7 +129,8 @@ test("verified OTP signup, wrong code, resend, restoration, signout and sign-in"
     await expect(page.getByRole("heading", { name: "Check your inbox" })).toBeVisible();
     await fillCode(await latestCode(target, email));
     await page.getByRole("button", { name: "Verify and continue" }).click();
-    await expect(page.getByRole("heading", { name: "Welcome to the team space." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Retrospectives", level: 1 })).toBeVisible();
+    await page.getByText("Account", { exact: true }).click();
     await page.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem("nhostSession") === null)).toBe(true);

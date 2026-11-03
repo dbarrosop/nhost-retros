@@ -13,9 +13,9 @@ import { onlineManager } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ParticipantAvatar } from "../../components/ParticipantAvatar";
+import { useDrafts } from "../../lib/drafts";
 import { readFailed, requireAffected, useRetroApi, useRetroQuery } from "../../lib/retro-api";
 import { useSession } from "../sessions/api";
-import { TextForm } from "../sessions/controls";
 import { AnswerCard, dragControlId } from "./AnswerCard";
 import {
   addTopic,
@@ -24,6 +24,7 @@ import {
   type BoardAnswer,
   type BoardResult,
   boardQuery,
+  createThemeFromCard,
   deleteTopic,
   groupingFailed,
   moveAnswer,
@@ -32,6 +33,14 @@ import {
   ungrouped,
 } from "./api";
 import { moveControlId } from "./MoveAnswerControl";
+import {
+  NewThemeEditor,
+  NewThemeStage,
+  newThemeButtonId,
+  newThemeDropId,
+  stagedCardDraftKey,
+  themeNameDraftKey,
+} from "./NewThemeStage";
 import { TopicColumn } from "./TopicColumn";
 
 // One arrow step per column, in DOM order, including a stacked mobile board.
@@ -44,7 +53,19 @@ function boardCoordinates(targetId: { current: string | null }): KeyboardCoordin
         : 0;
     if (!direction || !context.collisionRect) return;
     event.preventDefault();
-    const columns = context.droppableContainers.getEnabled();
+    // New themes register after the staging zone, but keyboard navigation must
+    // still follow the rendered column order rather than registration order.
+    const columns = context.droppableContainers.getEnabled().sort((a, b) => {
+      const first = a.node.current,
+        second = b.node.current;
+      if (!first || !second) return 0;
+      const position = first.compareDocumentPosition(second);
+      return position & Node.DOCUMENT_POSITION_FOLLOWING
+        ? -1
+        : position & Node.DOCUMENT_POSITION_PRECEDING
+          ? 1
+          : 0;
+    });
     const current = columns.findIndex((column) => column.id === targetId.current);
     const target = columns[current + direction];
     const rect = target && context.droppableRects.get(target.id);
@@ -78,7 +99,7 @@ export function QuestionBoard({
       ) : (
         <>
           {query.isError && (
-            <p role="alert">{readFailed} Your board and topic drafts are kept below.</p>
+            <p role="alert">{readFailed} Your board and theme drafts are kept below.</p>
           )}
           <div className="board-intro">
             <p className="eyebrow">Facilitator board · {session.name}</p>
@@ -90,7 +111,7 @@ export function QuestionBoard({
               Find the themes in your team’s reflections. Only trusted facilitators can see this
               board and its authors.
               {session.ended &&
-                " Answer content is permanently frozen; topics and grouping remain open."}
+                " Answer content is permanently frozen; themes and grouping remain open."}
             </p>
           </div>
           <BoardWorkspace sessionId={sessionId} questionId={questionId} />
@@ -114,6 +135,10 @@ export function BoardWorkspace({
     { questionId, sessionId },
   );
   const api = useRetroApi("facilitator");
+  const drafts = useDrafts();
+  const [stagedId, setStagedId] = useState<string | null>(
+    () => drafts?.get(stagedCardDraftKey) ?? (drafts?.has(themeNameDraftKey) ? "" : null),
+  );
   const [held, setHeld] = useState<Board | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -143,18 +168,22 @@ export function BoardWorkspace({
     }
   }, [focus, held]);
 
-  async function change(document: string, variables: Record<string, unknown>, field: string) {
+  type ChangeResult = { affected_rows: number; returning?: { id: string }[] };
+  async function change(
+    document: string,
+    variables: Record<string, unknown>,
+    field: string,
+    validate: (result: ChangeResult | undefined) => void = requireAffected,
+  ) {
     if (locked.current || !board || busy || !onlineManager.isOnline())
       throw new Error(groupingFailed);
     locked.current = true;
     setPending(true);
     setHeld(board);
     try {
-      const result = await api.request<Record<string, { affected_rows: number }>>(
-        document,
-        variables,
-      );
-      requireAffected(result[field]);
+      const result = await api.request<Record<string, ChangeResult>>(document, variables);
+      validate(result[field]);
+      return result[field];
     } finally {
       // Keep the displayed snapshot still until the authoritative replacement is ready.
       if (onlineManager.isOnline()) await api.invalidate();
@@ -165,7 +194,57 @@ export function BoardWorkspace({
     }
   }
   const columnName = (id: string) =>
-    id === ungrouped ? "Ungrouped" : (board?.topics.find((t) => t.id === id)?.name ?? "a topic");
+    id === newThemeDropId
+      ? "New theme staging area"
+      : id === ungrouped
+        ? "Ungrouped"
+        : (board?.topics.find((t) => t.id === id)?.name ?? "a theme");
+  function stageCard(id: string) {
+    if (busy || locked.current || (id && stagedId && stagedId !== id)) return;
+    drafts?.set(stagedCardDraftKey, id);
+    setStagedId(id);
+    setError("");
+    setNotice(
+      id
+        ? "Card staged for a new theme. Enter a name; grouping has not changed."
+        : "Name your new theme.",
+    );
+  }
+  function clearStage() {
+    drafts?.delete(stagedCardDraftKey);
+    drafts?.delete(themeNameDraftKey);
+    setStagedId(null);
+  }
+  function cancelStage() {
+    const target = stagedId ? moveControlId(stagedId) : newThemeButtonId;
+    clearStage();
+    setFocus(target);
+    setNotice("Theme creation cancelled. No grouping changed.");
+  }
+  async function createTheme(name: string) {
+    if (stagedId && !board?.answers.some((answer) => answer.id === stagedId))
+      throw new Error(groupingFailed);
+    const result = await change(
+      stagedId ? createThemeFromCard : addTopic,
+      { questionId, name, ...(stagedId ? { answerId: stagedId } : {}) },
+      stagedId ? "createdTheme" : "insertRetroTopics",
+      (created) => {
+        // Nested inserts can include the assignment in affected_rows. Verify
+        // the single returned parent instead of treating that count as themes.
+        if (
+          !created ||
+          created.affected_rows < 1 ||
+          created.returning?.length !== 1 ||
+          !created.returning[0]?.id
+        )
+          throw new Error(groupingFailed);
+      },
+    );
+    clearStage();
+    const createdId = result?.returning?.[0]?.id;
+    setFocus(createdId ? `topic-title-${createdId}` : newThemeButtonId);
+    setNotice(`Theme “${name}” created${stagedId ? " and the card moved into it" : ""}.`);
+  }
   async function move(answer: BoardAnswer, target: string, control: "move" | "drag") {
     setError("");
     setNotice("");
@@ -308,9 +387,9 @@ export function BoardWorkspace({
         </p>
       )}
       <p className="board-help" id="board-help">
-        Drag by the grip, or use each card’s Move-to menu. On a grip, press Space to pick up, arrow
-        keys to choose a column, Space to drop and Escape to cancel. On touch, hold the grip to
-        lift.
+        Drag by the grip, or use each card’s Move-to menu. Drop on + to name a new group. On a grip,
+        press Space to pick up, arrow keys to choose a column, Space to drop and Escape to cancel.
+        On touch, hold the grip to lift.
       </p>
       {query.isError && (
         <p role="alert">{readFailed} Grouping is paused until the board reconnects.</p>
@@ -366,46 +445,70 @@ export function BoardWorkspace({
             cancelDrag();
             return;
           }
-          void move(answer, String(over.id), "drag");
+          if (over.id === newThemeDropId) {
+            setHeld(null);
+            stageCard(answer.id);
+          } else void move(answer, String(over.id), "drag");
         }}
       >
-        <div className="board-columns">
-          {columns.map((column) => {
-            const topic = board.topics.find((t) => t.id === column.id);
-            const cards = visibleAnswers.filter(
-              (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
-            );
-            const totalCount = board.answers.filter(
-              (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
-            ).length;
-            return (
-              <TopicColumn
-                key={column.id}
-                id={column.id}
-                topic={topic}
-                count={cards.length}
-                totalCount={totalCount}
-                busy={busy || !!dragging}
-                onRename={(name) =>
-                  change(renameTopic, { id: column.id, name }, "updateRetroTopics")
-                }
-                onDelete={() => change(deleteTopic, { id: column.id }, "deleteRetroTopics")}
-              >
-                {cards.map((answer) => (
-                  <AnswerCard
-                    key={answer.id}
-                    answer={answer}
-                    number={board.answers.findIndex((a) => a.id === answer.id) + 1}
-                    topics={board.topics}
-                    busy={busy}
-                    onMove={(target, control) => {
-                      if (!dragging) void move(answer, target, control);
-                    }}
-                  />
-                ))}
-              </TopicColumn>
-            );
-          })}
+        <NewThemeEditor
+          stagedId={stagedId}
+          answer={board.answers.find((answer) => answer.id === stagedId)}
+          busy={busy}
+          dragging={!!dragging}
+          onOpen={() => stageCard("")}
+          onCancel={cancelStage}
+          onSave={createTheme}
+        />
+        <div className="board-layout">
+          <div className="board-columns">
+            {columns.map((column) => {
+              const topic = board.topics.find((t) => t.id === column.id);
+              const cards = visibleAnswers.filter(
+                (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
+              );
+              const totalCount = board.answers.filter(
+                (a) => (a.assignment?.topicId ?? ungrouped) === column.id,
+              ).length;
+              return (
+                <TopicColumn
+                  key={column.id}
+                  id={column.id}
+                  topic={topic}
+                  count={cards.length}
+                  totalCount={totalCount}
+                  busy={busy || !!dragging}
+                  onRename={(name) =>
+                    change(renameTopic, { id: column.id, name }, "updateRetroTopics")
+                  }
+                  onDelete={() => change(deleteTopic, { id: column.id }, "deleteRetroTopics")}
+                >
+                  {cards.map((answer) => (
+                    <AnswerCard
+                      key={answer.id}
+                      answer={answer}
+                      number={board.answers.findIndex((a) => a.id === answer.id) + 1}
+                      topics={board.topics}
+                      busy={busy || answer.id === stagedId}
+                      canStage={!stagedId}
+                      onNewTheme={() => {
+                        if (!dragging) stageCard(answer.id);
+                      }}
+                      onMove={(target, control) => {
+                        if (!dragging) void move(answer, target, control);
+                      }}
+                    />
+                  ))}
+                </TopicColumn>
+              );
+            })}
+          </div>
+          <NewThemeStage
+            stagedId={stagedId}
+            busy={busy}
+            dragging={!!dragging}
+            onOpen={() => stageCard("")}
+          />
         </div>
         <DragOverlay dropAnimation={null}>
           {dragged && (
@@ -415,17 +518,6 @@ export function BoardWorkspace({
           )}
         </DragOverlay>
       </DndContext>
-      <div className="editor-panel topic-composer">
-        <h2>Add a theme</h2>
-        <TextForm
-          label="New topic"
-          maximum={120}
-          submit="Add topic"
-          blocked={busy || !!dragging}
-          failureMessage={groupingFailed}
-          onSave={(name) => change(addTopic, { questionId, name }, "insertRetroTopics")}
-        />
-      </div>
     </section>
   );
 }

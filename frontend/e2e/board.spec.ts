@@ -28,6 +28,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
   page,
   context,
   browser,
+  baseURL,
   isMobile,
 }) => {
   test.setTimeout(120_000);
@@ -38,7 +39,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     alice = await actor(group);
   const db = await connect(target);
   const participantContext = await newContext(browser, {
-    baseURL: "http://localhost:5173",
+    baseURL,
     viewport: page.viewportSize(),
   });
   try {
@@ -105,11 +106,14 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     await expect(participant.getByText("Alice", { exact: true })).toHaveCount(0);
 
     await page.goto(`/facilitate/${sessionId}`);
-    await page.getByRole("link", { name: "Open reflection board for question 1" }).click();
+    await page.getByRole("link", { name: "Open board for question 1" }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "What should we make space for?" }),
     ).toBeVisible();
-    await expect(page.getByText(alice.email, { exact: true })).toBeVisible();
+    await expect(page.getByText(alice.email, { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: /^Author of card 1:/ }).focus();
+    await expect(page.getByRole("tooltip").getByText(alice.email, { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
     const aliceChip = page.getByRole("button", { name: `Alice (${alice.email})`, exact: true });
     await expect(aliceChip).toHaveAttribute("aria-pressed", "true");
     await aliceChip.click();
@@ -120,12 +124,20 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     await aliceChip.click();
     await expect(page.getByRole("article")).toHaveCount(1);
     for (const name of ["Keep", "Improve"]) {
-      await page.getByLabel("New topic", { exact: true }).fill(name);
-      await page.getByRole("button", { name: "Add topic", exact: true }).click();
+      await page.getByRole("button", { name: "New theme", exact: true }).click();
+      await page.getByLabel("Theme name", { exact: true }).fill(name);
+      await page.getByRole("button", { name: "Create theme", exact: true }).click();
       await expect(page.getByRole("region", { name, exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Add topic", exact: true })).toBeFocused();
+      await expect(page.getByRole("heading", { name, exact: true })).toBeFocused();
     }
-    const select = () => page.getByRole("combobox", { name: "Move card 1 to", exact: true });
+    const select = () => page.getByLabel(/^Move card 1 to/);
+    const moveTo = async (name: string) => {
+      await select().click();
+      await page
+        .locator(".card-move-menu[open] .popup-panel")
+        .getByRole("button", { name, exact: true })
+        .click();
+    };
     const handle = () => page.getByRole("button", { name: "Drag card 1", exact: true });
     await expect(handle()).toHaveCSS("touch-action", "none");
     const gripSize = await handle().boundingBox();
@@ -189,10 +201,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       /drop-target/,
     );
     await page.keyboard.press("Space");
-    await expect(select()).toHaveValue(
-      (await db.query("SELECT topic_id FROM retro_answer_topics WHERE answer_id=$1", [answerId]))
-        .rows[0].topic_id,
-    );
+    await expect(select()).toHaveText("Improve");
     await expect(
       page.getByRole("region", { name: "Improve", exact: true }).getByRole("article"),
     ).toHaveCount(1);
@@ -221,7 +230,7 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       }
       await route.continue();
     });
-    await select().selectOption(keep);
+    await moveTo("Keep");
     await expect(page.getByRole("alert")).toContainText("This grouping change wasn’t saved");
     await expect(page.getByRole("region", { name: "Keep", exact: true })).toHaveCount(0);
     await expect(
@@ -229,25 +238,29 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     ).toHaveCount(1);
     await expect(select()).toBeFocused();
     await page.unroute(graphqlUrl);
-    await select().selectOption("ungrouped");
-    await expect(select()).toHaveValue("ungrouped");
+    await moveTo("Ungrouped");
+    await expect(select()).toHaveText("Ungrouped");
     await expect(select()).toBeFocused();
 
-    await page.getByRole("button", { name: "Rename topic Improve", exact: true }).click();
-    await page.getByLabel("Rename topic Improve", { exact: true }).fill("Make space");
-    await page.getByRole("button", { name: "Save topic name", exact: true }).click();
+    await page.getByRole("button", { name: "Rename theme Improve", exact: true }).click();
+    await page.getByLabel("Rename theme Improve", { exact: true }).fill("Make space");
+    await page.getByRole("button", { name: "Save theme name", exact: true }).click();
     await expect(page.getByRole("region", { name: "Make space", exact: true })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Rename topic Make space", exact: true }),
+      page.getByRole("button", { name: "Rename theme Make space", exact: true }),
     ).toBeFocused();
     const topic = (
       await db.query("SELECT id FROM retro_topics WHERE question_id=$1 AND name='Make space'", [
         questionId,
       ])
     ).rows[0].id;
-    await select().selectOption(topic);
-    await expect(select()).toHaveValue(topic);
-    await page.getByRole("button", { name: "Delete topic Make space", exact: true }).click();
+    await moveTo("Make space");
+    await expect(select()).toHaveText("Make space");
+    expect(
+      (await db.query("SELECT topic_id FROM retro_answer_topics WHERE answer_id=$1", [answerId]))
+        .rows[0].topic_id,
+    ).toBe(topic);
+    await page.getByRole("button", { name: "Delete theme Make space", exact: true }).click();
     const dialog = page.getByRole("dialog");
     const dialogAxe = await new AxeBuilder({ page }).analyze();
     expect(
@@ -255,14 +268,47 @@ test("trusted facilitators cluster accessibly, including after closure, without 
     ).toEqual([]);
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Delete topic Make space", exact: true }),
+      page.getByRole("button", { name: "Delete theme Make space", exact: true }),
     ).toBeFocused();
-    await page.getByRole("button", { name: "Delete topic Make space", exact: true }).click();
-    await dialog.getByRole("button", { name: "Delete topic Make space", exact: true }).click();
+    await page.getByRole("button", { name: "Delete theme Make space", exact: true }).click();
+    await dialog.getByRole("button", { name: "Delete theme Make space", exact: true }).click();
     await expect(page.getByRole("region", { name: "Make space", exact: true })).toHaveCount(0);
-    await expect(select()).toHaveValue("ungrouped");
+    await expect(select()).toHaveText("Ungrouped");
     await expect(page.getByRole("heading", { name: "Ungrouped", exact: true })).toBeFocused();
     expect(await content()).toEqual(original);
+
+    // The staging zone follows normal columns in DOM order, even after themes
+    // have been added/deleted. Dropping stages only; confirmation writes once.
+    await handle().press("Space");
+    await page.keyboard.press(isMobile ? "ArrowDown" : "ArrowRight");
+    await page.keyboard.press(isMobile ? "ArrowDown" : "ArrowRight");
+    await expect(
+      page.getByRole("region", { name: "New theme staging area", exact: true }),
+    ).toHaveClass(/drop-target/);
+    await page.keyboard.press("Space");
+    await expect(page.getByLabel("Theme name", { exact: true })).toBeFocused();
+    expect(
+      (
+        await db.query("SELECT count(*)::int AS n FROM retro_answer_topics WHERE answer_id=$1", [
+          answerId,
+        ])
+      ).rows[0].n,
+    ).toBe(0);
+    await page.getByLabel("Theme name", { exact: true }).fill("A staged theme");
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(select()).toBeFocused();
+    await select().click();
+    await page
+      .locator(".card-move-menu[open]")
+      .getByRole("button", { name: "New theme…", exact: true })
+      .click();
+    await page.getByLabel("Theme name", { exact: true }).fill("A staged theme");
+    await page.getByRole("button", { name: "Create theme", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "A staged theme", exact: true }).getByRole("article"),
+    ).toHaveCount(1);
+    expect(await content()).toEqual(original);
+    await moveTo("Ungrouped");
 
     await page.getByRole("link", { name: "Back to session" }).click();
     await page.getByRole("button", { name: "End session", exact: true }).click();
@@ -272,27 +318,33 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       .click();
     await expect(page.getByText(/permanently read-only/)).toBeVisible();
     // Long participant emails must wrap, not enlarge the mobile layout viewport.
+    await page.getByRole("button", { name: /^Participants/ }).click();
     await expect(page.getByRole("button", { name: `Remove ${alice.email}` })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
       ),
     ).toBe(true);
-    await page.getByRole("link", { name: "Open reflection board for question 1" }).click();
-    await expect(page.getByText(/topics and grouping remain open/)).toBeVisible();
+    await page.getByRole("link", { name: "Open board for question 1" }).click();
+    await expect(page.getByText(/themes and grouping remain open/)).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Edit card|Delete card|Edit question|End session/ }),
     ).toHaveCount(0);
-    await page.getByLabel("New topic", { exact: true }).fill("After closure");
-    await page.getByRole("button", { name: "Add topic", exact: true }).click();
+    await page.getByRole("button", { name: "New theme", exact: true }).click();
+    await page.getByLabel("Theme name", { exact: true }).fill("After closure");
+    await page.getByRole("button", { name: "Create theme", exact: true }).click();
     await expect(page.getByRole("region", { name: "After closure", exact: true })).toBeVisible();
     const after = (
       await db.query("SELECT id FROM retro_topics WHERE question_id=$1 AND name='After closure'", [
         questionId,
       ])
     ).rows[0].id;
-    await select().selectOption(after);
-    await expect(select()).toHaveValue(after);
+    await moveTo("After closure");
+    await expect(select()).toHaveText("After closure");
+    expect(
+      (await db.query("SELECT topic_id FROM retro_answer_topics WHERE answer_id=$1", [answerId]))
+        .rows[0].topic_id,
+    ).toBe(after);
     expect(await content()).toEqual(original);
     // Plain-text wrapping at the actual 4,000-code-point boundary, with no page overflow.
     // Frozen rows cannot be inserted now; exercise the same rendering using a separate active question.
@@ -330,7 +382,14 @@ test("trusted facilitators cluster accessibly, including after closure, without 
       /drop-target/,
     );
     await page.keyboard.press("Space");
-    await expect(select()).toHaveValue(longTopic);
+    await expect(select()).toHaveText("Long-card theme");
+    expect(
+      (
+        await db.query("SELECT topic_id FROM retro_answer_topics WHERE question_id=$1", [
+          longQuestion,
+        ])
+      ).rows[0].topic_id,
+    ).toBe(longTopic);
     await expect(handle()).toBeFocused();
     expect(
       await page.evaluate(

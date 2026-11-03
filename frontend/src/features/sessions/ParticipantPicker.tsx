@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { ParticipantAvatar } from "../../components/ParticipantAvatar";
 import { changeFailed } from "../../lib/retro-api";
 import type { ParticipantAccount } from "./participants-api";
@@ -61,6 +62,7 @@ export function ParticipantPicker({
       <div className="participant-picker" ref={container}>
         <div className="participant-search">
           <svg
+            className="participant-search-icon"
             viewBox="0 0 20 20"
             aria-hidden="true"
             fill="none"
@@ -129,12 +131,10 @@ export function ParticipantPicker({
               }
             }}
           />
-          <span className="participant-search-chevron" aria-hidden="true">
-            ⌄
-          </span>
+          <DisclosureChevron className="participant-search-chevron" />
         </div>
         {open && (
-          <div className="participant-options-panel">
+          <div className="popup-panel participant-options-panel">
             <div
               id={`${id}-options`}
               className="participant-options"
@@ -145,6 +145,7 @@ export function ParticipantPicker({
             >
               {matches.map((account, index) => (
                 <button
+                  className="popup-item"
                   key={account.id}
                   id={`${id}-option-${account.id}`}
                   type="button"

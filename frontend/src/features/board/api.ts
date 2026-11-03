@@ -20,7 +20,15 @@ export const boardQuery = `query QuestionBoard($questionId: uuid!, $sessionId: u
   }
 }`;
 export const addTopic = `mutation AddTopic($questionId: uuid!, $name: String!) {
-  insertRetroTopics(objects: [{questionId: $questionId, name: $name}]) { affected_rows }
+  insertRetroTopics(objects: [{questionId: $questionId, name: $name}]) { affected_rows returning { id } }
+}`;
+// Both fields execute in one database transaction. A failed nested assignment
+// rolls back the old-assignment deletion and the newly inserted theme together.
+export const createThemeFromCard = `mutation CreateThemeFromCard($questionId: uuid!, $answerId: uuid!, $name: String!) {
+  removedAssignment: deleteRetroAnswerTopics(where: {answerId: {_eq: $answerId}, questionId: {_eq: $questionId}}) { affected_rows }
+  createdTheme: insertRetroTopics(objects: [{questionId: $questionId, name: $name, assignments: {data: [{answerId: $answerId}]}}]) {
+    affected_rows returning { id }
+  }
 }`;
 export const renameTopic = `mutation RenameTopic($id: uuid!, $name: String!) {
   updateRetroTopics(where: {id: {_eq: $id}}, _set: {name: $name}) { affected_rows }

@@ -55,6 +55,10 @@ test("two people keep multiple private cards; closure rejects a stale draft with
       "INSERT INTO retro_questions(session_id,text) VALUES($1,'What deserves more space?')",
       [sessionId],
     );
+    await db.query(
+      "INSERT INTO retro_questions(session_id,text) VALUES($1,'What would make next time better?')",
+      [sessionId],
+    );
     for (const userId of [alice.id, bob.id])
       await db.query("INSERT INTO retro_session_participants(session_id,user_id) VALUES($1,$2)", [
         sessionId,
@@ -82,6 +86,40 @@ test("two people keep multiple private cards; closure rejects a stale draft with
     });
     await page.goto(`/sessions/${sessionId}`);
     await other.goto(`/sessions/${sessionId}`);
+    // Question changes retain drafts without submitting them or exposing another question's cards.
+    const firstDraft = page.getByLabel("New card for question 1", { exact: true });
+    await firstDraft.fill("A first-question draft");
+    const chooser = page.locator(".question-chooser > summary");
+    await chooser.click();
+    const secondQuestion = page.locator(".question-chooser-options").getByRole("button", {
+      name: /2\.\s*What would make next time better/,
+    });
+    await secondQuestion.hover();
+    await page.mouse.down();
+    try {
+      // Pointer focus changes must not hide the option before its click fires.
+      await page.getByRole("main").evaluate((element) => {
+        if (element instanceof HTMLElement) element.focus({ preventScroll: true });
+      });
+      await expect(secondQuestion).toBeVisible();
+    } finally {
+      await page.mouse.up();
+    }
+    await expect(chooser).toHaveText("Question 2 of 2");
+    await expect(page.locator(".question-chooser")).not.toHaveAttribute("open", "");
+    await expect(
+      page.getByRole("heading", { name: "What deserves more space?" }),
+    ).not.toBeVisible();
+    await page
+      .getByLabel("New card for question 2", { exact: true })
+      .fill("A second-question draft");
+    await page.getByRole("button", { name: "Previous", exact: true }).click();
+    await expect(firstDraft).toHaveValue("A first-question draft");
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(page.getByLabel("New card for question 2", { exact: true })).toHaveValue(
+      "A second-question draft",
+    );
+    await page.getByRole("button", { name: "Previous", exact: true }).click();
     const observations = [
       "Alice: time for deep work",
       "Alice: fewer interruptions",
@@ -128,8 +166,7 @@ test("two people keep multiple private cards; closure rejects a stale draft with
     await expect(page.getByRole("article")).toHaveCount(1);
     await expect(
       page
-        .getByRole("listitem")
-        .filter({ has: page.getByRole("heading", { name: "What deserves more space?" }) })
+        .getByRole("region", { name: "Your reflection cards for question 1", exact: true })
         .getByRole("heading", { name: "Your reflection cards", exact: true }),
     ).toBeFocused();
     await expect(other.getByRole("article")).toHaveCount(2);

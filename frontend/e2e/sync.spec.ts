@@ -27,6 +27,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
   page,
   context,
   browser,
+  baseURL,
 }) => {
   test.setTimeout(120_000);
   const target = await guard(),
@@ -38,11 +39,11 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     bob = await actor(group);
   const db = await connect(target);
   const firstContext = await newContext(browser, {
-    baseURL: "http://localhost:5173",
+    baseURL,
     viewport: page.viewportSize(),
   });
   const secondContext = await newContext(browser, {
-    baseURL: "http://localhost:5173",
+    baseURL,
     viewport: page.viewportSize(),
   });
   let release = () => {};
@@ -97,7 +98,8 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     ]);
     for (const view of [leader, observer])
       await expect(view.getByRole("region", { name: "Reflection board" })).toBeVisible();
-    await observer.getByLabel("New topic", { exact: true }).fill("An unsaved observer theme");
+    await observer.getByRole("button", { name: "New theme", exact: true }).click();
+    await observer.getByLabel("Theme name", { exact: true }).fill("An unsaved observer theme");
     await page
       .getByLabel("New card for question 1", { exact: true })
       .fill("Make room for deeper work");
@@ -109,11 +111,16 @@ test("independent browsers synchronize cards, grouping and closure; old requests
         await expect(view.getByText("Make room for deeper work", { exact: true })).toBeVisible({
           timeout: 5_000,
         });
-        await expect(view.getByText(alice.email, { exact: true })).toBeVisible();
+        await view.getByRole("button", { name: /^Author of card 1:/ }).focus();
+        await expect(
+          view.getByRole("tooltip").getByText(alice.email, { exact: true }),
+        ).toBeVisible();
+        await view.keyboard.press("Escape");
       }),
     );
-    await leader.getByLabel("New topic", { exact: true }).fill("Focus time");
-    await leader.getByRole("button", { name: "Add topic", exact: true }).click();
+    await leader.getByRole("button", { name: "New theme", exact: true }).click();
+    await leader.getByLabel("Theme name", { exact: true }).fill("Focus time");
+    await leader.getByRole("button", { name: "Create theme", exact: true }).click();
     await expect(leader.getByRole("region", { name: "Focus time", exact: true })).toBeVisible();
     await expect(observer.getByRole("region", { name: "Focus time", exact: true })).toBeVisible({
       timeout: 5_000,
@@ -121,16 +128,27 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     const topicId = (
       await db.query("SELECT id FROM retro_topics WHERE question_id=$1", [questionId])
     ).rows[0].id;
+    await leader.getByLabel(/^Move card 1 to/).click();
     await leader
-      .getByRole("combobox", { name: "Move card 1 to", exact: true })
-      .selectOption(topicId);
+      .locator(".card-move-menu[open]")
+      .getByRole("button", { name: "Focus time", exact: true })
+      .click();
     await expect(
       leader.getByRole("region", { name: "Focus time", exact: true }).getByRole("article"),
     ).toHaveCount(1);
+    // Clicking starts an async mutation; the refreshed board confirms its commit
+    // before the direct database assertion (especially on mobile).
+    expect(
+      (
+        await db.query("SELECT topic_id FROM retro_answer_topics WHERE question_id=$1", [
+          questionId,
+        ])
+      ).rows[0].topic_id,
+    ).toBe(topicId);
     await expect(
       observer.getByRole("region", { name: "Focus time", exact: true }).getByRole("article"),
     ).toHaveCount(1, { timeout: 5_000 });
-    await expect(observer.getByLabel("New topic", { exact: true })).toHaveValue(
+    await expect(observer.getByLabel("Theme name", { exact: true })).toHaveValue(
       "An unsaved observer theme",
     );
 
@@ -147,8 +165,9 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     const offlineReads = reads;
     await observer.clock.runFor(6000);
     expect(reads).toBe(offlineReads);
-    await leader.getByLabel("New topic", { exact: true }).fill("Reconnected theme");
-    await leader.getByRole("button", { name: "Add topic", exact: true }).click();
+    await leader.getByRole("button", { name: "New theme", exact: true }).click();
+    await leader.getByLabel("Theme name", { exact: true }).fill("Reconnected theme");
+    await leader.getByRole("button", { name: "Create theme", exact: true }).click();
     await expect(
       leader.getByRole("region", { name: "Reconnected theme", exact: true }),
     ).toBeVisible();
@@ -156,10 +175,10 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     await expect(
       observer.getByRole("region", { name: "Reconnected theme", exact: true }),
     ).toBeVisible({ timeout: 5_000 });
-    await leader.getByRole("button", { name: "Delete topic Focus time", exact: true }).click();
+    await leader.getByRole("button", { name: "Delete theme Focus time", exact: true }).click();
     await leader
       .getByRole("dialog")
-      .getByRole("button", { name: "Delete topic Focus time", exact: true })
+      .getByRole("button", { name: "Delete theme Focus time", exact: true })
       .click();
     await expect(leader.getByRole("region", { name: "Focus time", exact: true })).toHaveCount(0);
     await expect(observer.getByRole("region", { name: "Focus time", exact: true })).toHaveCount(0, {
@@ -168,7 +187,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     await expect(
       observer.getByRole("region", { name: "Ungrouped", exact: true }).getByRole("article"),
     ).toHaveCount(1);
-    await expect(observer.getByLabel("New topic", { exact: true })).toHaveValue(
+    await expect(observer.getByLabel("Theme name", { exact: true })).toHaveValue(
       "An unsaved observer theme",
     );
 
@@ -228,6 +247,7 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     });
     await observer.clock.runFor(2000);
     await ready;
+    await observer.getByText("Account", { exact: true }).click();
     await observer.getByRole("button", { name: "Sign out", exact: true }).click();
     await expect(
       observer.getByRole("heading", { name: "Welcome back", exact: true }),
@@ -248,10 +268,11 @@ test("independent browsers synchronize cards, grouping and closure; old requests
     await expect(observer.getByText("Make room for deeper work", { exact: true })).toHaveCount(0);
     await observer.goto(boardPath);
     await expect(observer).toHaveURL(/\/workspace$/);
-    await expect(observer.getByLabel("New topic", { exact: true })).toHaveCount(0);
+    await expect(observer.getByLabel("Theme name", { exact: true })).toHaveCount(0);
 
     await leader.goto(boardPath);
-    await expect(leader.getByText(alice.email, { exact: true })).toBeVisible();
+    await leader.getByRole("button", { name: /^Author of card 1:/ }).focus();
+    await expect(leader.getByRole("tooltip").getByText(alice.email, { exact: true })).toBeVisible();
     // The old JWT still claims facilitator: live database membership wins.
     await setFacilitator(db, first.id, "revoke");
     await expect(
