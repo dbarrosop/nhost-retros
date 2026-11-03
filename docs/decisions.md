@@ -563,6 +563,13 @@
   restricted to ordinary absolute HTTP(S) hosts without credentials, whitespace or
   backslashes. Blank links become null. There is no local status, ticket creation
   API or synchronization with the external tracker.
+- **Locale-independent ticket validation.** The forward migration
+  `20261109000000_retro_ticket_url_parity` leaves applied migration checksums intact.
+  Its CHECK uses C collation and explicit ECMAScript whitespace/Unicode control
+  ranges, not locale-dependent POSIX classes. Both layers spell out ASCII case
+  pairs for hosts and HTTP(S) schemes: JavaScript's Unicode `i` flag also accepts
+  long s and Kelvin sign in `[a-z]`. Mixed-case schemes/hosts and Unicode paths
+  remain supported; whitespace, controls and backslashes do not.
 - **Facilitator-only, even after ending.** CRUD and the minimal retained-owner
   ID/name/email view check live facilitator eligibility. Participants, including a
   facilitator using the ordinary user role, have no follow-up schema, relationships

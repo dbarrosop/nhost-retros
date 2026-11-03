@@ -329,6 +329,13 @@ Apply the migration together with current metadata using the
 refreshing Constellation before releasing the frontend. Use `down.sql` only for
 scratch migration roundtrips, never on a live backend.
 
+`20261109000000_retro_ticket_url_parity` replaces only the ticket-link CHECK to
+match the SPA's ASCII host and Unicode whitespace/control rules independently of
+Postgres locale; apply it forward without editing the original migration. It
+validates existing rows and refuses invalid stored links rather than silently
+removing or rewriting them. If validation fails, a facilitator must explicitly
+correct or clear those ticket links before retrying; retain the follow-up actions.
+
 Follow-up reads and CRUD require the explicit `facilitator` role plus live
 eligibility and facilitator membership. Participants have no follow-up or owner
 schema, including the `retroQuestions.followUps` relationship. A new or reassigned

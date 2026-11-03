@@ -357,10 +357,27 @@ describe("ticket links", () => {
     "https://",
     "https://user:password@example.com/1",
     "https://example.com/a b",
+    "https://example.com/a\u00A0b",
+    "https://example.com/a\uFEFFb",
+    "https://example.com/a\u202Fb",
+    "https://example.com/a\u2007b",
+    "https://example.com/a\u3000b",
+    "https://example.com/a\u2028b",
+    "https://example.com/a\u0085b",
+    "https://example.com/a\u0080b",
+    "https://\u017F.com/1",
+    "https://\u212A.com/1",
     "https://example.com/\\bad",
     "https://example.com/a\nb",
     `https://example.com/${"a".repeat(2048)}`,
   ])("rejects unsafe or malformed link %s", (value) => expect(() => ticketUrl(value)).toThrow());
+  it.each([
+    "HTTP://Tickets.Example.COM:8080/42",
+    "hTtPs://Tickets.Example.COM/42",
+    "https://example.com/café/😀?issue=K#details",
+  ])("allows ordinary hosts and Unicode paths in %s", (value) =>
+    expect(ticketUrl(value)).toBe(value),
+  );
   it("trims optional links and allows platform-independent HTTP(S)", () => {
     expect(ticketUrl(" \uFEFF\u3000")).toBeNull();
     expect(ticketUrl(" https://linear.app/acme/issue/ACME-42?view=all#details ")).toBe(

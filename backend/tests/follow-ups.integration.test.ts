@@ -110,12 +110,30 @@ describe("facilitator-managed question follow-ups", () => {
           "//example.com/42",
           "https://",
           "https://example.com/has space",
+          "https://example.com/a\u00A0b",
+          "https://example.com/a\uFEFFb",
+          "https://example.com/a\u202Fb",
+          "https://example.com/a\u2007b",
+          "https://example.com/a\u3000b",
+          "https://example.com/a\u2028b",
+          "https://example.com/a\u0085b",
+          "https://example.com/a\u0080b",
+          "https://\u017F.com/1",
+          "https://\u212A.com/1",
           "https://example.com/\\evil",
           "https://user:pass@example.com/42",
           `https://example.com/${"x".repeat(2048)}`,
         ]) {
           denied(await run(addFollowUp, { ...input, ticketUrl }));
           denied(await run(editFollowUp, { ...editInput, ticketUrl }));
+        }
+        for (const ticketUrl of [
+          "HTTP://Tickets.Example.COM:8080/42",
+          "hTtPs://Tickets.Example.COM/42",
+          "https://example.com/café/😀?issue=K#details",
+        ]) {
+          await changed(addFollowUp, { ...input, ticketUrl }, "insertRetroFollowUps");
+          await changed(editFollowUp, { ...editInput, ticketUrl }, "updateRetroFollowUps");
         }
         await changed(
           editFollowUp,
