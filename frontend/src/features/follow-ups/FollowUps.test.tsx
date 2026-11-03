@@ -357,13 +357,32 @@ describe("question follow-ups", () => {
     expect(screen.getByText("Owner: Alice (alice@example.com)")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
     const edit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
+    const owner = edit.getByLabelText("Owner");
+    const retainedOwner = edit.getByRole("option", {
+      name: "Alice (alice@example.com) — unavailable; keep current owner",
+      selected: true,
+    });
+    expect(retainedOwner).toBeEnabled();
+    await user.selectOptions(owner, bob.id);
+    expect(retainedOwner).toBeInTheDocument();
+    await user.selectOptions(owner, alice.id);
+    expect(owner).toHaveValue(alice.id);
+    const composer = within(screen.getByRole("form", { name: "New follow-up" }));
+    expect(
+      composer.queryByRole("option", { name: /Alice|Retained owner/ }),
+    ).not.toBeInTheDocument();
     await user.type(edit.getByLabelText("Action"), " tomorrow");
     await act(async () => {
       await app.queries.invalidateQueries();
     });
     expect(edit.getByLabelText("Action")).toHaveValue("Improve release notes tomorrow");
+    expect(retainedOwner).toHaveProperty("selected", true);
     await user.click(edit.getByRole("button", { name: "Save follow-up" }));
     await screen.findByText("Improve release notes tomorrow");
+    expect(
+      app.requests.find((request) => request.query.includes("mutation EditFollowUp("))?.variables
+        .ownerId,
+    ).toBe(alice.id);
     app.revoke();
     await act(async () => {
       await app.queries.invalidateQueries();
@@ -372,6 +391,56 @@ describe("question follow-ups", () => {
       expect(screen.queryByText("Improve release notes tomorrow")).not.toBeInTheDocument(),
     );
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    app.queries.clear();
+  });
+
+  it.each([
+    {
+      owner: { ...alice, displayName: "" },
+      label: "alice@example.com — unavailable; keep current owner",
+    },
+    { owner: null, label: "Retained owner (not available for new assignments)" },
+  ])("keeps a removed owner selectable with fallback label: $label", async ({ owner, label }) => {
+    const app = setup([{ ...saved, owner }]),
+      user = userEvent.setup();
+    await screen.findByText(saved.action);
+    app.removeAlice();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
+    const edit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
+    const retainedOwner = edit.getByRole("option", { name: label, selected: true });
+    expect(retainedOwner).toBeEnabled();
+    await user.selectOptions(edit.getByLabelText("Owner"), bob.id);
+    await user.selectOptions(edit.getByLabelText("Owner"), retainedOwner);
+    expect(edit.getByLabelText("Owner")).toHaveValue(alice.id);
+    app.queries.clear();
+  });
+
+  it("keeps a removed non-owner unavailable in the composer", async () => {
+    const app = setup(),
+      user = userEvent.setup();
+    await screen.findByText("No follow-ups yet.");
+    const composer = within(screen.getByRole("form", { name: "New follow-up" }));
+    await user.type(composer.getByLabelText("Action"), "Improve release notes");
+    await user.selectOptions(composer.getByLabelText("Owner"), alice.id);
+    app.removeAlice();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(
+      await composer.findByRole("option", {
+        name: "Selected owner is no longer available",
+        selected: true,
+      }),
+    ).toBeDisabled();
+    expect(
+      composer.queryByRole("option", { name: /Alice|Retained owner/ }),
+    ).not.toBeInTheDocument();
+    await user.click(composer.getByRole("button", { name: "Add follow-up" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a current session participant");
+    expect(app.requests.some((request) => request.query.includes("mutation"))).toBe(false);
     app.queries.clear();
   });
 });

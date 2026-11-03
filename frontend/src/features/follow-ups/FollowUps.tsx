@@ -168,6 +168,7 @@ function FollowUpItem({
             label={`Edit follow-up ${number}`}
             draftKey={draftKey}
             initial={followUp}
+            retainedOwner={followUp.owner}
             accounts={accounts}
             blocked={busy}
             onCancel={finish}

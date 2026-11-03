@@ -245,6 +245,10 @@ the same pinned Node, pnpm, Biome, Nhost CLI and Chromium as local development.
 There is no separate CI tool installer or browser download; the flake is the
 shared toolchain source of truth.
 
+In follow-up component tests, await the rendered picker change with `findByRole`
+or `waitFor` after invalidating queries. The refetch promise can resolve before
+React renders the updated participant options.
+
 ### Disposable backend and browser acceptance
 
 A running local Docker daemon is required. From the repo root, inside `nix develop`:

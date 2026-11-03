@@ -11,6 +11,7 @@ export function FollowUpForm({
   label,
   draftKey,
   initial = empty,
+  retainedOwner,
   accounts,
   blocked,
   onSave,
@@ -19,6 +20,7 @@ export function FollowUpForm({
   label: string;
   draftKey: string;
   initial?: FollowUpInput;
+  retainedOwner?: ParticipantAccount | null;
   accounts: ParticipantAccount[];
   blocked: boolean;
   onSave: (input: FollowUpInput) => Promise<unknown>;
@@ -35,6 +37,9 @@ export function FollowUpForm({
     }
   });
   const value = { ...initial, ...patch };
+  const retainedOwnerName = retainedOwner?.displayName
+    ? `${retainedOwner.displayName} (${retainedOwner.email})`
+    : retainedOwner?.email;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const editing = Boolean(onCancel);
@@ -108,13 +113,20 @@ export function FollowUpForm({
         onChange={(event) => update({ ownerId: event.target.value })}
       >
         <option value="">Choose a participant</option>
-        {value.ownerId && !accounts.some((account) => account.id === value.ownerId) && (
-          <option value={value.ownerId} disabled>
-            {value.ownerId === initial.ownerId
-              ? "Retained owner (not available for new assignments)"
-              : "Selected owner is no longer available"}
+        {initial.ownerId && !accounts.some((account) => account.id === initial.ownerId) && (
+          <option value={initial.ownerId}>
+            {retainedOwnerName
+              ? `${retainedOwnerName} — unavailable; keep current owner`
+              : "Retained owner (not available for new assignments)"}
           </option>
         )}
+        {value.ownerId &&
+          value.ownerId !== initial.ownerId &&
+          !accounts.some((account) => account.id === value.ownerId) && (
+            <option value={value.ownerId} disabled>
+              Selected owner is no longer available
+            </option>
+          )}
         {accounts.map((account) => (
           <option key={account.id} value={account.id}>
             {account.displayName ? `${account.displayName} (${account.email})` : account.email}

@@ -121,7 +121,14 @@ test("facilitators capture owned actions and ticket links, including after endin
       bob.id,
     ]);
     await page.getByRole("button", { name: "Edit follow-up 1", exact: true }).click();
-    await expect(editor.getByRole("option", { name: /Retained owner/ })).toHaveCount(1);
+    const retainedOwner = editor.getByRole("option", {
+      name: `Bob (${bob.email}) — unavailable; keep current owner`,
+      exact: true,
+    });
+    await expect(retainedOwner).toBeEnabled();
+    await expect(editor.getByLabel("Owner", { exact: true })).toHaveValue(bob.id);
+    await editor.getByLabel("Owner", { exact: true }).selectOption(alice.id);
+    await editor.getByLabel("Owner", { exact: true }).selectOption(bob.id);
     await editor.getByLabel("Action", { exact: true }).fill("Publish release notes after ending");
     await editor.getByRole("button", { name: "Save follow-up", exact: true }).click();
     await expect(
