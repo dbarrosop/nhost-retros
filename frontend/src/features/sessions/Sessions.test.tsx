@@ -472,15 +472,16 @@ describe("authorized retrospective workspace", () => {
         !board,
       );
       const user = userEvent.setup();
-      const label = board ? "New topic" : "New card for question 1";
+      const label = board ? "Theme name" : "New card for question 1";
+      if (board) await user.click(await screen.findByRole("button", { name: "New theme" }));
       await screen.findByLabelText(label, { exact: true });
       await waitFor(() => expect(screen.getByLabelText(label, { exact: true })).toBeEnabled());
       await user.type(screen.getByLabelText(label, { exact: true }), "Keep this unsaved thought");
       if (board) {
-        await user.click(screen.getByRole("button", { name: "Rename topic Keep" }));
-        await user.clear(screen.getByLabelText("Rename topic Keep", { exact: true }));
+        await user.click(screen.getByRole("button", { name: "Rename theme Keep" }));
+        await user.clear(screen.getByLabelText("Rename theme Keep", { exact: true }));
         await user.type(
-          screen.getByLabelText("Rename topic Keep", { exact: true }),
+          screen.getByLabelText("Rename theme Keep", { exact: true }),
           "Retain my rename",
         );
       } else {
@@ -519,7 +520,7 @@ describe("authorized retrospective workspace", () => {
         "Live updates · changes appear automatically",
       );
       if (board)
-        expect(screen.getByLabelText("Rename topic Keep", { exact: true })).toHaveValue(
+        expect(screen.getByLabelText("Rename theme Keep", { exact: true })).toHaveValue(
           "Retain my rename",
         );
       else
@@ -532,7 +533,8 @@ describe("authorized retrospective workspace", () => {
   it("clears private role caches on route switches and discards drafts on account/role changes", async () => {
     const app = setup(true, `/facilitate/${sessionId}/questions/${questionId}`);
     const user = userEvent.setup();
-    await user.type(await screen.findByLabelText("New topic"), "Private facilitator draft");
+    await user.click(await screen.findByRole("button", { name: "New theme" }));
+    await user.type(await screen.findByLabelText("Theme name"), "Private facilitator draft");
     await act(async () => {
       await app.router.navigate({ to: "/workspace" });
     });
@@ -549,8 +551,9 @@ describe("authorized retrospective workspace", () => {
         params: { sessionId, questionId },
       });
     });
-    expect(await screen.findByLabelText("New topic")).toHaveValue("");
-    await user.type(screen.getByLabelText("New topic"), "Never for the next account");
+    await user.click(await screen.findByRole("button", { name: "New theme" }));
+    expect(await screen.findByLabelText("Theme name")).toHaveValue("");
+    await user.type(screen.getByLabelText("Theme name"), "Never for the next account");
     const other = structuredClone(app.session);
     if (other.user) {
       other.user.id = "second";
@@ -559,7 +562,8 @@ describe("authorized retrospective workspace", () => {
     await act(async () => {
       app.client.sessionStorage.set(other);
     });
-    expect(await screen.findByLabelText("New topic")).toHaveValue("");
+    await user.click(await screen.findByRole("button", { name: "New theme" }));
+    expect(await screen.findByLabelText("Theme name")).toHaveValue("");
     expect(
       app.queries
         .getQueryCache()
@@ -571,7 +575,7 @@ describe("authorized retrospective workspace", () => {
       app.client.sessionStorage.set(other);
     });
     await screen.findByRole("heading", { name: "Retrospectives" });
-    expect(screen.queryByLabelText("New topic")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Theme name")).not.toBeInTheDocument();
     expect(
       app.queries
         .getQueryCache()
@@ -606,9 +610,10 @@ describe("authorized retrospective workspace", () => {
     const app = setup(true, `/facilitate/${sessionId}/questions/${questionId}`);
     const user = userEvent.setup();
     const board = await screen.findByRole("region", { name: "Reflection board" });
-    await user.type(screen.getByLabelText("New topic"), "My new theme draft");
-    await user.click(screen.getByRole("button", { name: "Rename topic Keep" }));
-    const rename = screen.getByLabelText("Rename topic Keep", { exact: true });
+    await user.click(screen.getByRole("button", { name: "New theme" }));
+    await user.type(screen.getByLabelText("Theme name"), "My new theme draft");
+    await user.click(screen.getByRole("button", { name: "Rename theme Keep" }));
+    const rename = screen.getByLabelText("Rename theme Keep", { exact: true });
     await user.clear(rename);
     await user.type(rename, "My rename draft");
     expect(rename).toHaveFocus();
@@ -619,7 +624,7 @@ describe("authorized retrospective workspace", () => {
     });
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn’t load this workspace");
     expect(screen.getByRole("region", { name: "Reflection board" })).toBe(board);
-    expect(screen.getByLabelText("New topic")).toHaveValue("My new theme draft");
+    expect(screen.getByLabelText("Theme name")).toHaveValue("My new theme draft");
     expect(rename).toHaveValue("My rename draft");
     expect(rename).toHaveFocus();
     expect(screen.queryByText("private engine details")).not.toBeInTheDocument();
@@ -630,7 +635,7 @@ describe("authorized retrospective workspace", () => {
     });
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
     expect(screen.getByRole("region", { name: "Reflection board" })).toBe(board);
-    expect(screen.getByLabelText("New topic")).toHaveValue("My new theme draft");
+    expect(screen.getByLabelText("Theme name")).toHaveValue("My new theme draft");
     expect(rename).toHaveValue("My rename draft");
     expect(rename).toHaveFocus();
     expect(app.roles.every((role) => role === "facilitator")).toBe(true);

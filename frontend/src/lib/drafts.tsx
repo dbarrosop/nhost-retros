@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useState } from "react";
 
-// Only unsaved text, never server responses. The workspace owns this memory and
+// Only unsaved input and intent target IDs, never server response snapshots.
+// The workspace owns this memory and
 // replaces it on account/role/session/board changes, not participant question
 // selection. Temporary JWT expiry may remount the query subtree without losing
 // a same-account draft. Nothing is persisted.

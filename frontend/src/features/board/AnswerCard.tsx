@@ -1,6 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import type { BoardAnswer, Topic } from "./api";
 import { ungrouped } from "./api";
+import { CardAuthor } from "./CardAuthor";
 import { MoveAnswerControl } from "./MoveAnswerControl";
 
 export const dragControlId = (id: string) => `drag-answer-${id}`;
@@ -10,12 +11,16 @@ export function AnswerCard({
   topics,
   busy,
   onMove,
+  onNewTheme,
+  canStage,
 }: {
   answer: BoardAnswer;
   number: number;
   topics: Topic[];
   busy: boolean;
   onMove: (topic: string, control: "move" | "drag") => void;
+  onNewTheme?: () => void;
+  canStage?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: answer.id,
@@ -32,33 +37,47 @@ export function AnswerCard({
       data-answer-id={answer.id}
     >
       <div className="board-card-heading">
-        <span className="card-number">{String(number).padStart(2, "0")}</span>
-        <button
-          ref={setActivatorNodeRef}
-          id={dragControlId(answer.id)}
-          className="drag-handle"
-          type="button"
-          {...attributes}
-          {...listeners}
-          aria-label={`Drag card ${number}`}
-          aria-disabled={busy}
-        >
-          <span aria-hidden="true">⠿</span>
-        </button>
+        <CardAuthor number={number} name={author} email={answer.author?.email} />
+        <div className="card-actions">
+          <MoveAnswerControl
+            answerId={answer.id}
+            number={number}
+            topicId={answer.assignment?.topicId ?? ungrouped}
+            topics={topics}
+            busy={busy}
+            onMove={(topic) => onMove(topic, "move")}
+            onNewTheme={onNewTheme}
+            canStage={canStage}
+          />
+          <button
+            ref={setActivatorNodeRef}
+            id={dragControlId(answer.id)}
+            className="drag-handle"
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`Drag card ${number}`}
+            aria-disabled={busy}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="7" cy="5" r="1.3" />
+              <circle cx="13" cy="5" r="1.3" />
+              <circle cx="7" cy="10" r="1.3" />
+              <circle cx="13" cy="10" r="1.3" />
+              <circle cx="7" cy="15" r="1.3" />
+              <circle cx="13" cy="15" r="1.3" />
+            </svg>
+          </button>
+        </div>
       </div>
       <p className="answer-text">{answer.text}</p>
-      <div className="card-author">
-        <h3>{author}</h3>
-        {answer.author?.email && author !== answer.author.email && <p>{answer.author.email}</p>}
-      </div>
-      <MoveAnswerControl
-        answerId={answer.id}
-        number={number}
-        topicId={answer.assignment?.topicId ?? ungrouped}
-        topics={topics}
-        busy={busy}
-        onMove={(topic) => onMove(topic, "move")}
-      />
     </article>
   );
 }

@@ -1,12 +1,14 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type HTMLAttributes, type ReactNode, useEffect, useRef } from "react";
 
 export function HeaderMenu({
   className,
   summary,
+  summaryProps,
   children,
 }: {
   className: string;
   summary: ReactNode;
+  summaryProps?: HTMLAttributes<HTMLElement>;
   children: ReactNode | ((close: () => void) => ReactNode);
 }) {
   const menu = useRef<HTMLDetailsElement>(null);
@@ -69,7 +71,9 @@ export function HeaderMenu({
         }
       }}
     >
-      <summary ref={trigger}>{summary}</summary>
+      <summary {...summaryProps} ref={trigger}>
+        {summary}
+      </summary>
       {typeof children === "function" ? children(close) : children}
     </details>
   );

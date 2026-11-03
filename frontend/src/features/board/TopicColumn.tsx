@@ -58,7 +58,7 @@ export function TopicColumn({
             <div className="title-actions">
               <IconButton
                 id={`rename-topic-${id}`}
-                label={`Rename topic ${name}`}
+                label={`Rename theme ${name}`}
                 icon="edit"
                 disabled={busy}
                 onClick={() => {
@@ -68,9 +68,9 @@ export function TopicColumn({
                 aria-expanded={editing}
               />
               <ConfirmAction
-                label={`Delete topic ${name}`}
+                label={`Delete theme ${name}`}
                 icon="delete"
-                title={`Delete topic “${name}”?`}
+                title={`Delete theme “${name}”?`}
                 description={`${totalCount} ${totalCount === 1 ? "card" : "cards"} will move to Ungrouped. No answer content or authorship will be deleted. This cannot be undone.`}
                 disabled={busy}
                 failureMessage={groupingFailed}
@@ -84,10 +84,10 @@ export function TopicColumn({
         {editing && topic && (
           <TextForm
             draftKey={draftKey}
-            label={`Rename topic ${name}`}
+            label={`Rename theme ${name}`}
             maximum={120}
             initial={name}
-            submit="Save topic name"
+            submit="Save theme name"
             focusOnMount
             blocked={busy}
             failureMessage={groupingFailed}
