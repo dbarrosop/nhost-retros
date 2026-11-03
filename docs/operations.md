@@ -345,7 +345,17 @@ can read ended-session follow-ups and their retained owners, including through
 `retroQuestions.followUps`, but cannot mutate them or query the account picker.
 These read-policy changes are metadata-only: apply current metadata and refresh
 Constellation before publishing the frontend; no new SQL migration or data backfill
-is needed. Ending a session now shares its existing cards and outcomes with all
+is needed.
+
+**Rollout caveat:** after this metadata is applied, previous SPA clients show all
+cards for an ended-session question as personal **Your reflection cards**, without
+author attribution and with the old privacy hint. This affects current eligible
+participants; active-session isolation and ended-card write blocks remain enforced.
+Keep metadata first (the new `MyAnswers` needs selectable `authorId`), publish the
+frontend promptly after the [step-3 smoke checks](#static-host-and-backend-first-rollout),
+and ask participants with open tabs to reload after publication to load the new bundle.
+
+Ending a session now shares its existing cards and outcomes with all
 current participants, including participants enrolled after closure. A new or reassigned
 owner must be a current eligible participant in that question's session. Removing
 an owner preserves existing follow-ups and their attribution; facilitators can
@@ -725,6 +735,9 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    metadata with zero inconsistencies. The guarded `test:*` commands intentionally
    cannot target production. Recreate/reload Constellation's metadata snapshot as
    required by its pinned version; Hasura metadata success alone is insufficient.
+   From this metadata change until clients load the new bundle, previous SPA clients
+   mislabel all ended-session question cards as **Your reflection cards** with the
+   old privacy hint; see the [rollout caveat](#question-follow-ups).
 3. Before publishing the new frontend, verify both role schemas and real-JWT
    controls on **both Hasura and Constellation**. Use approved synthetic accounts/data
    and a trusted smoke facilitator provisioned through approved SQL (see step 5).
@@ -787,9 +800,11 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
 
    Ended smoke-test content is intentionally retained. Never log JWTs, OTPs or admin
    responses.
-4. Publish the static frontend with the approved public URLs. Re-enroll synthetic
-   smoke participants as needed, then smoke-test HTTPS OTP delivery/verification,
-   restoration/signout, two-browser five-second updates, mobile/keyboard Move-to,
+4. Once the step-3 checks pass, promptly publish the static frontend with the
+   approved public URLs. Ask participants to reload existing tabs: publishing alone
+   does not replace their loaded bundle or correct its personal-card list/privacy
+   copy. Re-enroll synthetic smoke participants as needed, then smoke-test HTTPS OTP
+   delivery/verification, restoration/signout, two-browser five-second updates, mobile/keyboard Move-to,
    closed-session read-only state and deep-link fallback. Exercise facilitator
    **Participants** add/remove controls and the response-board author filter,
    including retained authors after removal. Verify facilitators must enroll
