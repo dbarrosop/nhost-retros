@@ -95,6 +95,8 @@ describe("ended-session participant reads", () => {
         await db.query("UPDATE retro_sessions SET ended=true WHERE id=$1", [hidden.sessionId]);
         const run = (query: string, variables = {}, who = alice) =>
           gql(target, url, who, "user", query, variables);
+        const questionVars = { questionId: current.questionId, sessionId: current.sessionId };
+        const summaryVars = { sessionId: current.sessionId };
         const vars = {
           answer: current.answers[1],
           topic: current.topic,
@@ -109,16 +111,20 @@ describe("ended-session participant reads", () => {
             retroAnswerTopic: null,
             retroFollowUp: null,
           });
-          expect(data(await run(boardQuery, current, who), "retroQuestions")).toEqual([]);
+          expect(data(await run(boardQuery, questionVars, who), "retroQuestions")).toEqual([]);
           expect(
-            data(await run(participantFollowUpsQuery, current, who), "retroQuestions"),
+            data(await run(participantFollowUpsQuery, questionVars, who), "retroQuestions"),
           ).toEqual([]);
-          expect(data(await run(followUpSummaryQuery, current, who), "retroSessions")).toEqual([]);
+          expect(data(await run(followUpSummaryQuery, summaryVars, who), "retroSessions")).toEqual(
+            [],
+          );
         };
-        expect(data(await run(boardQuery, current), "retroQuestions")).toMatchObject([
+        expect(data(await run(boardQuery, questionVars), "retroQuestions")).toMatchObject([
           { topics: [], answers: [{ id: current.answers[0], author: null, assignment: null }] },
         ]);
-        expect(data(await run(participantFollowUpsQuery, current), "retroQuestions")).toEqual([]);
+        expect(data(await run(participantFollowUpsQuery, questionVars), "retroQuestions")).toEqual(
+          [],
+        );
         expect((await run(byPk, vars)).data).toEqual({
           retroAnswer: null,
           retroTopic: null,
@@ -131,7 +137,7 @@ describe("ended-session participant reads", () => {
           [current.sessionId, bob.id],
         );
         await db.query("UPDATE retro_sessions SET ended=true WHERE id=$1", [current.sessionId]);
-        expect(data(await run(boardQuery, current), "retroQuestions")).toMatchObject([
+        expect(data(await run(boardQuery, questionVars), "retroQuestions")).toMatchObject([
           {
             topics: [{ id: current.topic }],
             answers: [
@@ -144,20 +150,20 @@ describe("ended-session participant reads", () => {
             ],
           },
         ]);
-        expect(data(await run(participantFollowUpsQuery, current), "retroQuestions")).toMatchObject(
-          [
-            {
-              followUps: [
-                {
-                  id: current.followUp,
-                  owner: { id: bob.id, email: bob.email },
-                  ticketUrl: "https://example.com/ticket/42",
-                },
-              ],
-            },
-          ],
-        );
-        expect(data(await run(followUpSummaryQuery, current), "retroSessions")).toMatchObject([
+        expect(
+          data(await run(participantFollowUpsQuery, questionVars), "retroQuestions"),
+        ).toMatchObject([
+          {
+            followUps: [
+              {
+                id: current.followUp,
+                owner: { id: bob.id, email: bob.email },
+                ticketUrl: "https://example.com/ticket/42",
+              },
+            ],
+          },
+        ]);
+        expect(data(await run(followUpSummaryQuery, summaryVars), "retroSessions")).toMatchObject([
           { questions: [{ followUps: [{ id: current.followUp }] }] },
         ]);
         expect((await run(byPk, vars)).data).toMatchObject({
@@ -196,11 +202,11 @@ describe("ended-session participant reads", () => {
           current.sessionId,
           outsider.id,
         ]);
-        expect(data(await run(boardQuery, current, outsider), "retroQuestions")).toMatchObject([
-          { answers: [{ id: current.answers[0] }, { id: current.answers[1] }] },
-        ]);
+        expect(data(await run(boardQuery, questionVars, outsider), "retroQuestions")).toMatchObject(
+          [{ answers: [{ id: current.answers[0] }, { id: current.answers[1] }] }],
+        );
         expect(
-          data(await run(participantFollowUpsQuery, current, outsider), "retroQuestions"),
+          data(await run(participantFollowUpsQuery, questionVars, outsider), "retroQuestions"),
         ).toMatchObject([{ followUps: [{ id: current.followUp, owner: { id: bob.id } }] }]);
         await db.query(
           "DELETE FROM retro_session_participants WHERE session_id=$1 AND user_id=$2",
@@ -209,7 +215,7 @@ describe("ended-session participant reads", () => {
         await invisible(outsider);
         expect(
           data(
-            await run(boardQuery, { ...current, sessionId: hidden.sessionId }),
+            await run(boardQuery, { questionId: current.questionId, sessionId: hidden.sessionId }),
             "retroQuestions",
           ),
         ).toEqual([]);
