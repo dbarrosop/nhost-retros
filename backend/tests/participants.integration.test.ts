@@ -100,7 +100,9 @@ describe("explicit session participants", () => {
             retroQuestions: [],
             retroQuestion: null,
           });
-          expect(data(await user(answersQuery, { questionId }), "retroAnswers")).toEqual([]);
+          expect(
+            data(await user(answersQuery, { questionId, authorId: alice.id }), "retroAnswers"),
+          ).toEqual([]);
           denied(await user(addAnswer, { questionId, text: "Not enrolled" }));
         };
         await invisible();
@@ -121,7 +123,9 @@ describe("explicit session participants", () => {
           "insertRetroAnswers",
         );
         const answer = (
-          data(await user(answersQuery, { questionId }), "retroAnswers") as { id: string }[]
+          data(await user(answersQuery, { questionId, authorId: alice.id }), "retroAnswers") as {
+            id: string;
+          }[]
         )[0];
         expect(
           data(await user(read, { id: sessionId, question: questionId }, bob), "retroSessions"),
@@ -157,7 +161,9 @@ describe("explicit session participants", () => {
         // Enrollment is also allowed for ended sessions, without reopening content.
         await db.query("UPDATE retro_sessions SET ended=true WHERE id=$1", [sessionId]);
         data(await manage(addParticipant, variables), "insertRetroSessionParticipants");
-        expect(data(await user(answersQuery, { questionId }), "retroAnswers")).toHaveLength(1);
+        expect(
+          data(await user(answersQuery, { questionId, authorId: alice.id }), "retroAnswers"),
+        ).toHaveLength(1);
         denied(await user(addAnswer, { questionId, text: "Ended" }));
         await db.query("DELETE FROM auth.user_roles WHERE user_id=$1 AND role='facilitator'", [
           manager.id,

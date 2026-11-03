@@ -1,6 +1,6 @@
 import type { ParticipantAccount } from "../sessions/participants-api.js";
 
-// Private outcomes: these documents are only used with the facilitator role.
+// Management reads include the owner picker. Participant reads omit the account directory.
 export type FollowUp = {
   id: string;
   action: string;
@@ -13,7 +13,7 @@ export type FollowUpsResult = {
   retroQuestions: {
     id: string;
     followUps: FollowUp[];
-    session: { participants: { userId: string; account: ParticipantAccount | null }[] };
+    session?: { participants: { userId: string; account: ParticipantAccount | null }[] };
   }[];
 };
 const projection = `id action ownerId ticketUrl owner { id displayName email }`;
@@ -22,6 +22,12 @@ export const followUpsQuery = `query QuestionFollowUps($questionId: uuid!, $sess
     id
     followUps(order_by: [{createdAt: asc}, {id: asc}]) { ${projection} }
     session { participants(order_by: [{userId: asc}]) { userId account { id displayName email } } }
+  }
+}`;
+export const participantFollowUpsQuery = `query ParticipantFollowUps($questionId: uuid!, $sessionId: uuid!) {
+  retroQuestions(where: {id: {_eq: $questionId}, sessionId: {_eq: $sessionId}, session: {ended: {_eq: true}}}) {
+    id
+    followUps(order_by: [{createdAt: asc}, {id: asc}]) { ${projection} }
   }
 }`;
 export type FollowUpSummaryResult = {

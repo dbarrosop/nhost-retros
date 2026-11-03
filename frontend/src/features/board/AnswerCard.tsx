@@ -10,6 +10,7 @@ export function AnswerCard({
   number,
   topics,
   busy,
+  readOnly = false,
   onMove,
   onNewTheme,
   canStage,
@@ -18,13 +19,14 @@ export function AnswerCard({
   number: number;
   topics: Topic[];
   busy: boolean;
+  readOnly?: boolean;
   onMove: (topic: string, control: "move" | "drag") => void;
   onNewTheme?: () => void;
   canStage?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: answer.id,
-    disabled: busy,
+    disabled: busy || readOnly,
   });
   const author = answer.author?.displayName.trim() || answer.author?.email || "Former participant";
   // Decorative identity cue, not author/topic/status: keep it stable across moves.
@@ -38,44 +40,46 @@ export function AnswerCard({
     >
       <div className="board-card-heading">
         <CardAuthor number={number} name={author} email={answer.author?.email} />
-        <div className="card-actions">
-          <MoveAnswerControl
-            answerId={answer.id}
-            number={number}
-            topicId={answer.assignment?.topicId ?? ungrouped}
-            topics={topics}
-            busy={busy}
-            onMove={(topic) => onMove(topic, "move")}
-            onNewTheme={onNewTheme}
-            canStage={canStage}
-          />
-          <button
-            ref={setActivatorNodeRef}
-            id={dragControlId(answer.id)}
-            className="drag-handle"
-            type="button"
-            {...attributes}
-            {...listeners}
-            aria-label={`Drag card ${number}`}
-            aria-disabled={busy}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden="true"
-              focusable="false"
+        {!readOnly && (
+          <div className="card-actions">
+            <MoveAnswerControl
+              answerId={answer.id}
+              number={number}
+              topicId={answer.assignment?.topicId ?? ungrouped}
+              topics={topics}
+              busy={busy}
+              onMove={(topic) => onMove(topic, "move")}
+              onNewTheme={onNewTheme}
+              canStage={canStage}
+            />
+            <button
+              ref={setActivatorNodeRef}
+              id={dragControlId(answer.id)}
+              className="drag-handle"
+              type="button"
+              {...attributes}
+              {...listeners}
+              aria-label={`Drag card ${number}`}
+              aria-disabled={busy}
             >
-              <circle cx="7" cy="5" r="1.3" />
-              <circle cx="13" cy="5" r="1.3" />
-              <circle cx="7" cy="10" r="1.3" />
-              <circle cx="13" cy="10" r="1.3" />
-              <circle cx="7" cy="15" r="1.3" />
-              <circle cx="13" cy="15" r="1.3" />
-            </svg>
-          </button>
-        </div>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <circle cx="7" cy="5" r="1.3" />
+                <circle cx="13" cy="5" r="1.3" />
+                <circle cx="7" cy="10" r="1.3" />
+                <circle cx="13" cy="10" r="1.3" />
+                <circle cx="7" cy="15" r="1.3" />
+                <circle cx="13" cy="15" r="1.3" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
       <p className="answer-text">{answer.text}</p>
     </article>

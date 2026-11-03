@@ -95,6 +95,12 @@ describe("private reflection cards", () => {
       user = userEvent.setup();
     const input = await screen.findByLabelText("New card for question 1", { exact: true });
     await waitFor(() => expect(input).toBeEnabled());
+    expect(
+      app.requests.find((request) => request.query.includes("query MyAnswers"))?.variables,
+    ).toEqual({
+      questionId: "question",
+      authorId: "alice",
+    });
     for (const text of ["  First thought  ", "A second thought"]) {
       await user.type(input, text);
       await user.click(screen.getByRole("button", { name: "Add card to question 1" }));

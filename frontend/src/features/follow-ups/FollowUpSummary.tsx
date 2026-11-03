@@ -1,13 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import { useId } from "react";
-import { readFailed, useRetroQuery } from "../../lib/retro-api";
+import { type AppRole, readFailed, useRetroQuery } from "../../lib/retro-api";
 import { type FollowUpSummaryResult, followUpSummaryQuery } from "./api";
 import { FollowUpDetails } from "./FollowUpDetails";
 
-export function FollowUpSummary({ sessionId }: { sessionId: string }) {
+export function FollowUpSummary({
+  sessionId,
+  role = "facilitator",
+}: {
+  sessionId: string;
+  role?: AppRole;
+}) {
   const heading = useId();
   const query = useRetroQuery<FollowUpSummaryResult>(
-    "facilitator",
+    role,
     ["follow-up-summary", sessionId],
     followUpSummaryQuery,
     { sessionId },
@@ -27,7 +33,9 @@ export function FollowUpSummary({ sessionId }: { sessionId: string }) {
         <p>Session unavailable.</p>
       ) : questions.length === 0 ? (
         <p className="field-hint">
-          No follow-ups yet. Open a question’s reflection board to capture an action.
+          {role === "facilitator"
+            ? "No follow-ups yet. Open a question’s reflection board to capture an action."
+            : "No follow-ups yet."}
         </p>
       ) : (
         questions.map((question) => (
@@ -35,7 +43,11 @@ export function FollowUpSummary({ sessionId }: { sessionId: string }) {
             <h3>
               <Link
                 className="quiet-link"
-                to="/facilitate/$sessionId/questions/$questionId"
+                to={
+                  role === "facilitator"
+                    ? "/facilitate/$sessionId/questions/$questionId"
+                    : "/sessions/$sessionId/questions/$questionId"
+                }
                 params={{ sessionId, questionId: question.id }}
               >
                 {question.text}

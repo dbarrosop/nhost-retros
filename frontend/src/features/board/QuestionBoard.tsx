@@ -14,7 +14,13 @@ import { Link } from "@tanstack/react-router";
 import { useLayoutEffect, useRef, useState } from "react";
 import { ParticipantAvatar } from "../../components/ParticipantAvatar";
 import { useDrafts } from "../../lib/drafts";
-import { readFailed, requireAffected, useRetroApi, useRetroQuery } from "../../lib/retro-api";
+import {
+  type AppRole,
+  readFailed,
+  requireAffected,
+  useRetroApi,
+  useRetroQuery,
+} from "../../lib/retro-api";
 import { FollowUps } from "../follow-ups/FollowUps";
 import { useSession } from "../sessions/api";
 import { AnswerCard, dragControlId } from "./AnswerCard";
@@ -79,23 +85,29 @@ function boardCoordinates(targetId: { current: string | null }): KeyboardCoordin
 export function QuestionBoard({
   sessionId,
   questionId,
+  role = "facilitator",
 }: {
   sessionId: string;
   questionId: string;
+  role?: AppRole;
 }) {
-  const query = useSession("facilitator", sessionId);
+  const query = useSession(role, sessionId);
   const session = query.data?.retroSessions[0];
   const question = session?.questions.find((q) => q.id === questionId);
   return (
     <>
-      <Link className="quiet-link" to="/facilitate/$sessionId" params={{ sessionId }}>
+      <Link
+        className="quiet-link"
+        to={role === "facilitator" ? "/facilitate/$sessionId" : "/sessions/$sessionId"}
+        params={{ sessionId }}
+      >
         ← Back to session
       </Link>
       {query.isPending ? (
         <p role="status">Loading the conversation…</p>
       ) : query.isError && !session ? (
         <p role="alert">{readFailed}</p>
-      ) : !question || !session ? (
+      ) : !question || !session || (role === "user" && !session.ended) ? (
         <h1>Question unavailable</h1>
       ) : (
         <>
@@ -103,20 +115,29 @@ export function QuestionBoard({
             <p role="alert">{readFailed} Your board and theme drafts are kept below.</p>
           )}
           <div className="board-intro">
-            <p className="eyebrow">Facilitator board · {session.name}</p>
+            <p className="eyebrow">
+              {role === "facilitator" ? "Facilitator board" : "Reflection board"} · {session.name}
+            </p>
             <span className={`session-status ${session.ended ? "ended" : ""}`}>
               {session.ended ? "Ended" : "Active"}
             </span>
             <h1>{question.text}</h1>
             <p className="hero-description">
-              Find the themes in your team’s reflections. Only trusted facilitators can see this
-              board and its authors.
-              {session.ended &&
-                " Answer content is permanently frozen; themes, grouping and follow-ups remain open."}
+              {role === "user"
+                ? "Explore everyone’s reflections, themes and follow-ups. This board is read-only."
+                : "Find the themes in your team’s reflections. Participants can see this board and its authors once the session ends."}
+              {role === "facilitator" &&
+                session.ended &&
+                " Answer content is permanently frozen; facilitators can still manage themes, grouping and follow-ups."}
             </p>
           </div>
-          <BoardWorkspace sessionId={sessionId} questionId={questionId} />
-          <FollowUps sessionId={sessionId} questionId={questionId} readOnly={query.isError} />
+          <BoardWorkspace sessionId={sessionId} questionId={questionId} role={role} />
+          <FollowUps
+            sessionId={sessionId}
+            questionId={questionId}
+            role={role}
+            readOnly={query.isError}
+          />
         </>
       )}
     </>
@@ -126,17 +147,18 @@ export function QuestionBoard({
 export function BoardWorkspace({
   sessionId,
   questionId,
+  role = "facilitator",
 }: {
   sessionId: string;
   questionId: string;
+  role?: AppRole;
 }) {
-  const query = useRetroQuery<BoardResult>(
-    "facilitator",
-    ["board", questionId, sessionId],
-    boardQuery,
-    { questionId, sessionId },
-  );
-  const api = useRetroApi("facilitator");
+  const readOnly = role === "user";
+  const query = useRetroQuery<BoardResult>(role, ["board", questionId, sessionId], boardQuery, {
+    questionId,
+    sessionId,
+  });
+  const api = useRetroApi(role);
   const drafts = useDrafts();
   const [stagedId, setStagedId] = useState<string | null>(
     () => drafts?.get(stagedCardDraftKey) ?? (drafts?.has(themeNameDraftKey) ? "" : null),
@@ -154,7 +176,7 @@ export function BoardWorkspace({
   // Holding geometry must never hold onto an unavailable private board.
   const latest = query.data?.retroQuestions[0];
   const board = query.isSuccess && !latest ? undefined : (held ?? latest);
-  const busy = pending || query.isError || !api.enabled;
+  const busy = readOnly || pending || query.isError || !api.enabled;
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -388,13 +410,17 @@ export function BoardWorkspace({
             : "No reflection cards yet."}
         </p>
       )}
-      <p className="board-help" id="board-help">
-        Drag by the grip, or use each card’s Move-to menu. Drop on + to name a new group. On a grip,
-        press Space to pick up, arrow keys to choose a column, Space to drop and Escape to cancel.
-        On touch, hold the grip to lift.
-      </p>
+      {!readOnly && (
+        <p className="board-help" id="board-help">
+          Drag by the grip, or use each card’s Move-to menu. Drop on + to name a new group. On a
+          grip, press Space to pick up, arrow keys to choose a column, Space to drop and Escape to
+          cancel. On touch, hold the grip to lift.
+        </p>
+      )}
       {query.isError && (
-        <p role="alert">{readFailed} Grouping is paused until the board reconnects.</p>
+        <p role="alert">
+          {readFailed} {!readOnly && "Grouping is paused until the board reconnects."}
+        </p>
       )}
       {error && (
         <p role="alert" className="form-error">
@@ -453,15 +479,17 @@ export function BoardWorkspace({
           } else void move(answer, String(over.id), "drag");
         }}
       >
-        <NewThemeEditor
-          stagedId={stagedId}
-          answer={board.answers.find((answer) => answer.id === stagedId)}
-          busy={busy}
-          dragging={!!dragging}
-          onOpen={() => stageCard("")}
-          onCancel={cancelStage}
-          onSave={createTheme}
-        />
+        {!readOnly && (
+          <NewThemeEditor
+            stagedId={stagedId}
+            answer={board.answers.find((answer) => answer.id === stagedId)}
+            busy={busy}
+            dragging={!!dragging}
+            onOpen={() => stageCard("")}
+            onCancel={cancelStage}
+            onSave={createTheme}
+          />
+        )}
         <div className="board-layout">
           <div className="board-columns">
             {columns.map((column) => {
@@ -480,6 +508,7 @@ export function BoardWorkspace({
                   count={cards.length}
                   totalCount={totalCount}
                   busy={busy || !!dragging}
+                  readOnly={readOnly}
                   onRename={(name) =>
                     change(renameTopic, { id: column.id, name }, "updateRetroTopics")
                   }
@@ -492,6 +521,7 @@ export function BoardWorkspace({
                       number={board.answers.findIndex((a) => a.id === answer.id) + 1}
                       topics={board.topics}
                       busy={busy || answer.id === stagedId}
+                      readOnly={readOnly}
                       canStage={!stagedId}
                       onNewTheme={() => {
                         if (!dragging) stageCard(answer.id);
@@ -505,12 +535,14 @@ export function BoardWorkspace({
               );
             })}
           </div>
-          <NewThemeStage
-            stagedId={stagedId}
-            busy={busy}
-            dragging={!!dragging}
-            onOpen={() => stageCard("")}
-          />
+          {!readOnly && (
+            <NewThemeStage
+              stagedId={stagedId}
+              busy={busy}
+              dragging={!!dragging}
+              onOpen={() => stageCard("")}
+            />
+          )}
         </div>
         <DragOverlay dropAnimation={null}>
           {dragged && (

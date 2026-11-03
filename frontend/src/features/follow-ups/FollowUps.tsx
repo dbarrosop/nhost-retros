@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { IconButton } from "../../components/IconButton";
 import { useDrafts } from "../../lib/drafts";
-import { readFailed, useRetroQuery } from "../../lib/retro-api";
+import { type AppRole, readFailed, useRetroQuery } from "../../lib/retro-api";
 import { ConfirmAction, useChange } from "../sessions/controls";
 import type { ParticipantAccount } from "../sessions/participants-api";
 import {
@@ -12,6 +12,7 @@ import {
   type FollowUpsResult,
   followUpFailed,
   followUpsQuery,
+  participantFollowUpsQuery,
 } from "./api";
 import { FollowUpDetails } from "./FollowUpDetails";
 import { FollowUpForm } from "./FollowUpForm";
@@ -20,23 +21,26 @@ export function FollowUps({
   sessionId,
   questionId,
   readOnly = false,
+  role = "facilitator",
 }: {
   sessionId: string;
   questionId: string;
   readOnly?: boolean;
+  role?: AppRole;
 }) {
   const query = useRetroQuery<FollowUpsResult>(
-    "facilitator",
+    role,
     ["follow-ups", questionId, sessionId],
-    followUpsQuery,
+    role === "facilitator" ? followUpsQuery : participantFollowUpsQuery,
     { sessionId, questionId },
   );
-  const change = useChange("facilitator");
+  const change = useChange(role);
+  const canManage = role === "facilitator";
   const heading = useId();
   const question = query.data?.retroQuestions[0];
-  const busy = readOnly || query.isError || change.isPending;
+  const busy = !canManage || readOnly || query.isError || change.isPending;
   const accounts =
-    question?.session.participants.flatMap((participant) =>
+    question?.session?.participants.flatMap((participant) =>
       participant.account ? [participant.account] : [],
     ) ?? [];
   return (
@@ -48,7 +52,9 @@ export function FollowUps({
         <span className="small-label">Turn reflections into actions</span>
       </div>
       <p className="field-hint">
-        Only facilitators can see and manage these actions, including after this session ends.
+        {canManage
+          ? "Facilitators manage these actions. Participants can read them once the session ends."
+          : "These actions are shared with session participants. Only facilitators can change them."}
       </p>
       {query.isPending ? (
         <p role="status">Loading follow-ups…</p>
@@ -70,6 +76,7 @@ export function FollowUps({
                 number={index + 1}
                 accounts={accounts}
                 busy={busy}
+                canManage={canManage}
                 onSave={(input) =>
                   change.mutateAsync({
                     query: editFollowUp,
@@ -88,22 +95,24 @@ export function FollowUps({
               />
             ))}
           </ol>
-          <div className="editor-panel">
-            <h3>Add a follow-up</h3>
-            <FollowUpForm
-              label="New follow-up"
-              draftKey={`follow-up:new:${questionId}`}
-              accounts={accounts}
-              blocked={busy}
-              onSave={(input) =>
-                change.mutateAsync({
-                  query: addFollowUp,
-                  variables: { questionId, ...input },
-                  field: "insertRetroFollowUps",
-                })
-              }
-            />
-          </div>
+          {canManage && (
+            <div className="editor-panel">
+              <h3>Add a follow-up</h3>
+              <FollowUpForm
+                label="New follow-up"
+                draftKey={`follow-up:new:${questionId}`}
+                accounts={accounts}
+                blocked={busy}
+                onSave={(input) =>
+                  change.mutateAsync({
+                    query: addFollowUp,
+                    variables: { questionId, ...input },
+                    field: "insertRetroFollowUps",
+                  })
+                }
+              />
+            </div>
+          )}
         </>
       )}
     </section>
@@ -115,6 +124,7 @@ function FollowUpItem({
   number,
   accounts,
   busy,
+  canManage,
   onSave,
   onDelete,
   onDeleted,
@@ -123,6 +133,7 @@ function FollowUpItem({
   number: number;
   accounts: ParticipantAccount[];
   busy: boolean;
+  canManage: boolean;
   onSave: React.ComponentProps<typeof FollowUpForm>["onSave"];
   onDelete: () => Promise<unknown>;
   onDeleted: () => void;
@@ -142,28 +153,30 @@ function FollowUpItem({
           <h3 id={titleId} tabIndex={-1}>
             Follow-up {number}
           </h3>
-          <div className="title-actions">
-            {!editing && (
-              <IconButton
-                label={`Edit follow-up ${number}`}
-                icon="edit"
+          {canManage && (
+            <div className="title-actions">
+              {!editing && (
+                <IconButton
+                  label={`Edit follow-up ${number}`}
+                  icon="edit"
+                  disabled={busy}
+                  onClick={() => setEditing(true)}
+                />
+              )}
+              <ConfirmAction
+                label={`Delete follow-up ${number}`}
+                icon="delete"
+                title="Delete this follow-up?"
+                description="This removes the action from the retrospective. Any linked external ticket is left unchanged. This cannot be undone."
                 disabled={busy}
-                onClick={() => setEditing(true)}
+                failureMessage={followUpFailed}
+                onConfirm={onDelete}
+                afterConfirm={onDeleted}
               />
-            )}
-            <ConfirmAction
-              label={`Delete follow-up ${number}`}
-              icon="delete"
-              title="Delete this follow-up?"
-              description="This removes the action from the retrospective. Any linked external ticket is left unchanged. This cannot be undone."
-              disabled={busy}
-              failureMessage={followUpFailed}
-              onConfirm={onDelete}
-              afterConfirm={onDeleted}
-            />
-          </div>
+            </div>
+          )}
         </div>
-        {editing ? (
+        {canManage && editing ? (
           <FollowUpForm
             label={`Edit follow-up ${number}`}
             draftKey={draftKey}

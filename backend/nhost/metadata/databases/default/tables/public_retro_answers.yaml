@@ -102,6 +102,7 @@ select_permissions:
       columns:
         - id
         - question_id
+        - author_id
         - text
         - created_at
         - updated_at
@@ -112,8 +113,13 @@ select_permissions:
                 participants:
                   user_id:
                     _eq: X-Hasura-User-Id
-          - author_id:
-              _eq: X-Hasura-User-Id
+          - _or:
+              - author_id:
+                  _eq: X-Hasura-User-Id
+              - question:
+                  session:
+                    ended:
+                      _eq: true
           - _exists:
               _table:
                 name: retro_eligible_users

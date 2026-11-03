@@ -38,3 +38,26 @@ select_permissions:
               _eq: X-Hasura-User-Id
             is_facilitator:
               _eq: true
+  - role: user
+    permission:
+      columns:
+        - id
+        - display_name
+        - email
+      filter:
+        _and:
+          - _exists:
+              _table:
+                name: retro_eligible_users
+                schema: public
+              _where:
+                id:
+                  _eq: X-Hasura-User-Id
+          - answers:
+              question:
+                session:
+                  ended:
+                    _eq: true
+                  participants:
+                    user_id:
+                      _eq: X-Hasura-User-Id

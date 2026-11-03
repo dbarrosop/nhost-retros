@@ -56,7 +56,7 @@ describe("private multiple cards and actual role-schema contracts", () => {
           gql(target, url, who, role, query, variables);
         const mine = async (who = alice): Promise<AnswersResult["retroAnswers"]> =>
           data(
-            await run(answersQuery, { questionId: question }, who),
+            await run(answersQuery, { questionId: question, authorId: who.id }, who),
             "retroAnswers",
           ) as AnswersResult["retroAnswers"];
         const all = async (): Promise<FacilitatorAnswersResult["retroAnswers"]> =>
@@ -88,7 +88,17 @@ describe("private multiple cards and actual role-schema contracts", () => {
               .sort();
           expect(fields("retroAnswers")).toEqual(
             (role === "user"
-              ? ["id", "questionId", "text", "createdAt", "updatedAt", "question"]
+              ? [
+                  "id",
+                  "questionId",
+                  "authorId",
+                  "text",
+                  "createdAt",
+                  "updatedAt",
+                  "question",
+                  "author",
+                  "assignment",
+                ]
               : [
                   "id",
                   "questionId",
@@ -107,8 +117,8 @@ describe("private multiple cards and actual role-schema contracts", () => {
           if (role === "user") {
             expect(fields("retroAnswers_insert_input", true)).toEqual(["questionId", "text"]);
             expect(fields("retroAnswers_set_input", true)).toEqual(["text"]);
-            expect(fields("retroAnswers_bool_exp", true)).not.toContain("authorId");
-            expect(fields("retroAnswers_order_by", true)).not.toContain("authorId");
+            expect(fields("retroAnswers_bool_exp", true)).toContain("authorId");
+            expect(fields("retroAnswers_order_by", true)).toContain("authorId");
           } else {
             expect(
               schema.mutationType.fields
@@ -166,17 +176,39 @@ describe("private multiple cards and actual role-schema contracts", () => {
           ),
         ).toBeNull();
         for (const query of [
-          "query { retroAnswers { authorId } }",
-          "query { retroAnswers { author { email } } }",
           "query { retroAnswersAggregate { aggregate { count } } }",
           "query { retroQuestions { answers_aggregate { aggregate { count } } } }",
-          "query { retroAnswers { question { answers { authorId } } } }",
-          "query { retroTopics { id } }",
-          "query { retroAnswerAuthors { email } }",
         ])
           denied(await run(query));
+        expect(
+          data(
+            await run(
+              "query($id: uuid!) { retroAnswers(where: {questionId: {_eq: $id}}) { authorId } }",
+              { id: question },
+            ),
+            "retroAnswers",
+          ),
+        ).toEqual([{ authorId: alice.id }, { authorId: alice.id }]);
+        expect(data(await run("query { retroTopics { id } }"), "retroTopics")).toEqual([]);
+        expect(
+          data(await run("query { retroAnswerAuthors { email } }"), "retroAnswerAuthors"),
+        ).toEqual([]);
+        expect(
+          data(
+            await run(
+              "query($id: uuid!) { retroAnswers(where: {questionId: {_eq: $id}}) { author { email } assignment { topicId } } }",
+              { id: question },
+            ),
+            "retroAnswers",
+          ),
+        ).toEqual([
+          { author: null, assignment: null },
+          { author: null, assignment: null },
+        ]);
         for (const role of ["me", "facilitator"])
-          denied(await run(answersQuery, { questionId: question }, alice, role));
+          denied(
+            await run(answersQuery, { questionId: question, authorId: alice.id }, alice, role),
+          );
         for (const [query, field] of [
           [editAnswer, "updateRetroAnswers"],
           [deleteAnswer, "deleteRetroAnswers"],
@@ -380,6 +412,8 @@ describe("private multiple cards and actual role-schema contracts", () => {
           ).rows,
         ).toEqual(frozen.rows);
         await expect(db.query("DELETE FROM auth.users WHERE id=$1", [alice.id])).rejects.toThrow();
+        // Keep ended-session visibility from this engine out of the next engine's active fixture.
+        await db.query("DELETE FROM retro_session_participants WHERE session_id=$1", [session]);
       }
       expect(group.budget.signin).toBe(3);
       expect(group.budget.email).toBe(0);

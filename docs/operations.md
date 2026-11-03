@@ -307,8 +307,11 @@ Accounts must first sign up and verify their email; this does not send invitatio
 Facilitators retain global management/board access, but must add themselves before
 using the ordinary participant route to answer.
 
-User-role session/question reads and all own-answer reads/writes require live
-session membership in addition to account eligibility. Removal preserves responses
+User-role session/question reads and all answer reads/writes require live
+session membership in addition to account eligibility. During active sessions,
+participants can read only their own cards. After ending, current participants
+can read every card, author, theme, grouping assignment, follow-up and owner in
+that session; the app exposes a read-only board and follow-up summary. Removal preserves responses
 and grouping but revokes participant access, including with existing JWTs. Answer
 triggers lock membership rows so stale concurrent writes fail if removal commits
 first. Membership can change after ending, but content remains permanently frozen.
@@ -322,7 +325,7 @@ it does not enroll pre-existing sessions or restore removed memberships.
 
 ### Question follow-ups
 
-`20261108000000_retro_follow_ups` adds facilitator-only question follow-ups and the
+`20261108000000_retro_follow_ups` adds facilitator-managed question follow-ups and the
 retained-owner identity view `retroFollowUpOwners`; it creates no follow-up rows.
 Apply the migration together with current metadata using the
 [backend-first rollout and pre-publish checks](#static-host-and-backend-first-rollout),
@@ -336,9 +339,14 @@ validates existing rows and refuses invalid stored links rather than silently
 removing or rewriting them. If validation fails, a facilitator must explicitly
 correct or clear those ticket links before retrying; retain the follow-up actions.
 
-Follow-up reads and CRUD require the explicit `facilitator` role plus live
-eligibility and facilitator membership. Participants have no follow-up or owner
-schema, including the `retroQuestions.followUps` relationship. A new or reassigned
+Follow-up CRUD and active-session reads require the explicit `facilitator` role
+plus live eligibility and facilitator membership. Current eligible participants
+can read ended-session follow-ups and their retained owners, including through
+`retroQuestions.followUps`, but cannot mutate them or query the account picker.
+These read-policy changes are metadata-only: apply current metadata and refresh
+Constellation before publishing the frontend; no new SQL migration or data backfill
+is needed. Ending a session now shares its existing cards and outcomes with all
+current participants, including participants enrolled after closure. A new or reassigned
 owner must be a current eligible participant in that question's session. Removing
 an owner preserves existing follow-ups and their attribution; facilitators can
 still edit their action/link or explicitly reassign/delete them. Follow-up CRUD

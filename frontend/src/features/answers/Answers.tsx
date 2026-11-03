@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { IconButton } from "../../components/IconButton";
+import { useAuth } from "../../lib/auth";
 import { useDrafts } from "../../lib/drafts";
 import { readFailed, useRetroQuery } from "../../lib/retro-api";
 import { ConfirmAction, TextForm, useChange } from "../sessions/controls";
@@ -23,8 +24,10 @@ export function Answers({
   ended: boolean;
   readOnly: boolean;
 }) {
+  const { session } = useAuth();
   const query = useRetroQuery<AnswersResult>("user", ["answers", questionId], answersQuery, {
     questionId,
+    authorId: session?.user?.id,
   });
   const change = useChange("user");
   const drafts = useDrafts();
@@ -41,7 +44,9 @@ export function Answers({
         Your reflection cards
       </h3>
       <p className="field-hint">
-        Only you and trusted facilitators can read your cards. Add a separate card for each thought.
+        {ended
+          ? "This session has ended. All participants can now read everyone’s cards."
+          : "Only you and trusted facilitators can read your cards until the session ends. Add a separate card for each thought."}
       </p>
       {query.isPending && <p role="status">Loading your cards…</p>}
       {query.isError && <p role="alert">{readFailed} Any unsaved draft is kept below.</p>}

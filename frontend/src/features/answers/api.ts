@@ -1,4 +1,5 @@
-// Participant projection deliberately has no author or grouping fields.
+// The personal editor stays owner-scoped even after the board becomes shared.
+// This also prevents a stale active-session screen from offering edits on other authors' cards.
 export type Answer = {
   id: string;
   questionId: string;
@@ -7,8 +8,8 @@ export type Answer = {
   updatedAt: string;
 };
 export type AnswersResult = { retroAnswers: Answer[] };
-export const answersQuery = `query MyAnswers($questionId: uuid!) {
-  retroAnswers(where: {questionId: {_eq: $questionId}}, order_by: [{createdAt: asc}, {id: asc}]) {
+export const answersQuery = `query MyAnswers($questionId: uuid!, $authorId: uuid!) {
+  retroAnswers(where: {questionId: {_eq: $questionId}, authorId: {_eq: $authorId}}, order_by: [{createdAt: asc}, {id: asc}]) {
     id questionId text createdAt updatedAt
   }
 }`;

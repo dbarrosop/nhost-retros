@@ -593,3 +593,33 @@
   reset edited fields. Read failures pause submission.
   Deletion requires confirmation and never touches the linked external ticket.
   Links are revalidated before rendering and open with `noopener noreferrer`.
+
+## Shared outcomes after ending
+
+- **Closure changes read visibility, not write authority.** This supersedes the
+  earlier participant-private board/follow-up policy for ended sessions. The
+  ordinary `user` role may read every answer, author, theme, assignment, follow-up
+  and retained owner only when the related session is ended and the requester is
+  currently enrolled and live-eligible. Root, by-PK and nested reads use the same
+  metadata predicates. Former contributors' data remains visible to enrolled
+  participants; removal still revokes the removed person's access. Enrollment
+  after closure grants the same read access. No backfill or SQL migration is needed.
+- **Minimal identities, no broader directory.** Author and owner views are filtered
+  through contributions to an accessible ended session, not merely through knowing
+  an account ID. Nested contributions are independently permission-filtered, so a
+  shared author's other sessions stay private. The eligible-account picker and
+  Auth directory remain unavailable to participants; aggregates and management
+  mutations are not added. `authorId` is selectable for owner-scoped editor reads;
+  active-session row permissions still expose only the requester's own cards.
+- **A participant board is genuinely read-only.** A separate participant URL uses
+  the explicit `user` role and refuses active sessions before mounting board reads.
+  The shared board components omit drag/move, theme and follow-up editing controls.
+  Session summaries and question links expose outcomes after closure. The personal
+  editor remains explicitly owner-filtered even after ending, preserving draft
+  identity and preventing a stale active screen from offering edits on newly shared
+  cards. Existing closure locks and facilitator post-end management are unchanged.
+- **Communicate the privacy transition.** Active reflection copy explains that cards
+  become shared after ending. The irreversible end-session confirmation warns
+  facilitators that everyone’s cards, authors, themes and follow-ups will become
+  readable to enrolled participants. Deploy metadata and refresh both engine schemas
+  before the frontend; no live stack is implicitly updated by this code change.

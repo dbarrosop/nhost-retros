@@ -37,6 +37,7 @@ function setup(
   withEndedSession = false,
   initialQuestions = reflectionQuestions.slice(0, 1),
   withFollowUp = false,
+  initiallyEnded = false,
 ) {
   const client = createNhostClient({ storage: new MemoryStorage(), configure: [] });
   const session: Session = {
@@ -68,7 +69,7 @@ function setup(
   const queries = createQueryClient();
   queries.setDefaultOptions({ queries: { retry: false } });
   const store = new AuthStore(client, queries);
-  let ended = false;
+  let ended = initiallyEnded;
   let affected = 1;
   let failedRead = false;
   let failedSessionRead = false;
@@ -155,14 +156,22 @@ function setup(
                       {
                         id: questionId,
                         topics: [{ id: "keep", name: "Keep" }],
-                        answers: [],
+                        answers: (answers.get(questionId) ?? []).map((answer) => ({
+                          ...answer,
+                          author: { id: "alice", displayName: "Alice", email: "alice@example.com" },
+                          assignment: { topicId: "keep" },
+                        })),
                       },
                     ],
                   }
-                : body.query.includes("query QuestionFollowUps(")
+                : /query (QuestionFollowUps|ParticipantFollowUps)\(/.test(body.query)
                   ? {
                       retroQuestions: [
-                        { id: questionId, followUps: [], session: { participants: [] } },
+                        {
+                          id: questionId,
+                          followUps: record.questions[0]?.followUps ?? [],
+                          session: { participants: [] },
+                        },
                       ],
                     }
                   : {
@@ -484,6 +493,83 @@ describe("authorized retrospective workspace", () => {
     expect(app.requests.some((request) => /FollowUps/.test(request.query))).toBe(false);
     app.queries.clear();
   });
+  it("warns that ending shares cards and outcomes with enrolled participants", async () => {
+    const app = setup(true, `/facilitate/${sessionId}`);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "End session" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      "All enrolled participants will be able to read everyone’s cards, authors, themes and follow-ups.",
+    );
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(app.requests.some((request) => request.query.includes("mutation EndSession"))).toBe(
+      false,
+    );
+    app.queries.clear();
+  });
+  it("shares ended-session summaries and links participants to a read-only board", async () => {
+    const app = setup(false, `/sessions/${sessionId}`, true, false, undefined, true, true);
+    const user = userEvent.setup();
+    const summary = await screen.findByRole("region", { name: "Follow-up summary" });
+    expect(await within(summary).findByText("Publish release notes")).toBeVisible();
+    expect(within(summary).getByRole("link", { name: "What helped?" })).toHaveAttribute(
+      "href",
+      `/sessions/${sessionId}/questions/${questionId}`,
+    );
+    await user.click(
+      screen.getByRole("link", { name: "Explore everyone’s cards and follow-ups →" }),
+    );
+    expect(await screen.findByRole("region", { name: "Reflection board" })).toBeVisible();
+    expect(await screen.findByRole("article", { name: "Card 1 by Alice" })).toHaveTextContent(
+      "A saved card",
+    );
+    expect(await screen.findByRole("region", { name: "Follow-ups" })).toHaveTextContent(
+      "Publish release notes",
+    );
+    expect(
+      screen.queryByRole("button", {
+        name: /Drag card|Rename theme|Delete theme|Edit follow-up|Delete follow-up/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("form")).not.toBeInTheDocument();
+    expect(app.roles.every((role) => role === "user")).toBe(true);
+    expect(app.requests.some((request) => /mutation|QuestionFollowUps\(/.test(request.query))).toBe(
+      false,
+    );
+    expect(screen.getByRole("link", { name: "← Back to session" })).toHaveAttribute(
+      "href",
+      `/sessions/${sessionId}`,
+    );
+    app.queries.clear();
+  });
+  it("rejects participant board deep links while a session is active", async () => {
+    const app = setup(false, `/sessions/${sessionId}/questions/${questionId}`);
+    expect(await screen.findByRole("heading", { name: "Question unavailable" })).toBeVisible();
+    expect(app.requests.some((request) => /QuestionBoard\(|FollowUps\(/.test(request.query))).toBe(
+      false,
+    );
+    expect(app.roles.every((role) => role === "user")).toBe(true);
+    app.queries.clear();
+  });
+  it("loads an ended-session participant board directly", async () => {
+    const app = setup(
+      false,
+      `/sessions/${sessionId}/questions/${questionId}`,
+      true,
+      false,
+      undefined,
+      true,
+      true,
+    );
+    expect(await screen.findByRole("article", { name: "Card 1 by Alice" })).toBeVisible();
+    expect(await screen.findByText("Publish release notes")).toBeVisible();
+    expect(app.roles.every((role) => role === "user")).toBe(true);
+    expect(
+      screen.queryByRole("button", {
+        name: /Drag card|Rename theme|Delete theme|Edit follow-up|Delete follow-up/,
+      }),
+    ).not.toBeInTheDocument();
+    app.queries.clear();
+  });
   it("keeps follow-up creation available on an ended facilitator board", async () => {
     const app = setup(true, `/facilitate/${sessionId}/questions/${questionId}`);
     await screen.findByRole("form", { name: "New follow-up" });
@@ -491,7 +577,9 @@ describe("authorized retrospective workspace", () => {
     await act(async () => {
       await app.queries.invalidateQueries();
     });
-    expect(await screen.findByText(/themes, grouping and follow-ups remain open/)).toBeVisible();
+    expect(
+      await screen.findByText(/facilitators can still manage themes, grouping and follow-ups/),
+    ).toBeVisible();
     expect(screen.getByRole("button", { name: "Add follow-up" })).not.toHaveAttribute(
       "aria-disabled",
       "true",

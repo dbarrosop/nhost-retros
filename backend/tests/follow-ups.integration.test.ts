@@ -7,6 +7,7 @@ import {
   type FollowUpsResult,
   followUpSummaryQuery,
   followUpsQuery,
+  participantFollowUpsQuery,
 } from "../../frontend/src/features/follow-ups/api.ts";
 import { setFacilitator } from "../scripts/facilitator.ts";
 import { actor, cleanupActor, newGroup } from "./lib/auth.ts";
@@ -171,14 +172,28 @@ describe("facilitator-managed question follow-ups", () => {
         await expect(
           db.query("DELETE FROM retro_questions WHERE id=$1", [current.questionId]),
         ).rejects.toThrow();
-        // Schema protections and private relationships apply even to a facilitator using 'user'.
+        // Read types exist, but active-session outcomes stay private for the user role.
+        expect(
+          data(await run(participantFollowUpsQuery, current, alice, "user"), "retroQuestions"),
+        ).toEqual([]);
+        expect(
+          data(
+            await run(followUpSummaryQuery, { sessionId: current.sessionId }, alice, "user"),
+            "retroSessions",
+          ),
+        ).toMatchObject([{ questions: [{ followUps: [] }] }]);
+        for (const [query, field] of [
+          ["query { retroFollowUps { id action owner { email } } }", "retroFollowUps"],
+          ["query { retroFollowUpOwners { id email } }", "retroFollowUpOwners"],
+          ["query { retroQuestions(where: {followUps: {}}) { id } }", "retroQuestions"],
+        ]) {
+          expect(data(await run(query, {}, alice, "user"), field)).toEqual([]);
+          expect(data(await run(query, {}, manager, "user"), field)).toEqual([]);
+        }
+        // Management projection (account picker), aggregates and writes remain unavailable.
         const probes: [string, Record<string, unknown>][] = [
           [followUpsQuery, current],
-          [followUpSummaryQuery, { sessionId: current.sessionId }],
-          ["query { retroFollowUps { id action owner { email } } }", {}],
-          ["query { retroFollowUpOwners { id email } }", {}],
           ["query { retroFollowUpsAggregate { aggregate { count } } }", {}],
-          ["query { retroQuestions(where: {followUps: {}}) { id } }", {}],
           [addFollowUp, input],
           [editFollowUp, { ...editInput }],
           [deleteFollowUp, { id: first.id }],

@@ -154,7 +154,11 @@ describe("facilitator-only grouping and minimal author projection", () => {
             "retroQuestions",
           ),
         ).toEqual([]);
-        denied(await run(boardQuery, boardVariables, alice, "user"));
+        expect(
+          data(await run(boardQuery, boardVariables, alice, "user"), "retroQuestions"),
+        ).toMatchObject([
+          { topics: [], answers: [{ id: current.answer, author: null, assignment: null }] },
+        ]);
         expect((await readBoard()).answers[0].author).toEqual({
           id: alice.id,
           displayName: "Alice",
@@ -194,10 +198,16 @@ describe("facilitator-only grouping and minimal author projection", () => {
             expect(schema.queryType.fields.map((f) => f.name)).not.toContain(root);
           if (role === "user") {
             for (const type of ["retroTopics", "retroAnswerTopics", "retroAnswerAuthors"])
-              expect(schema.types.some((t) => t.name.startsWith(type))).toBe(false);
-            expect(fields("retroQuestions")).not.toContain("topics");
-            expect(fields("retroAnswers")).not.toContain("assignment");
-            expect(fields("retroAnswers")).not.toContain("author");
+              expect(schema.types.some((t) => t.name === type)).toBe(true);
+            expect(fields("retroQuestions")).toContain("topics");
+            expect(fields("retroAnswers")).toEqual(
+              expect.arrayContaining(["assignment", "author"]),
+            );
+            expect(
+              schema.mutationType.fields.some((f) =>
+                /Retro(?:Topics?|AnswerTopics?|AnswerAuthors)/.test(f.name),
+              ),
+            ).toBe(false);
           } else {
             expect(fields("retroAnswerAuthors")).toEqual(["answers", "displayName", "email", "id"]);
             expect(fields("retroTopics_set_input", true)).toEqual(["name"]);
@@ -208,16 +218,28 @@ describe("facilitator-only grouping and minimal author projection", () => {
             );
           }
         }
-        // No direct, nested, aggregate, relationship-filter or role-header access for participants.
+        // Read types exist, but active-session grouping and authors remain invisible.
+        for (const [query, field] of [
+          [topics, "retroTopics"],
+          [assignments, "retroAnswerTopics"],
+          [authors, "retroAnswerAuthors"],
+        ]) {
+          expect(data(await run(query, {}, alice, "user"), field)).toEqual([]);
+          expect(data(await run(query, {}, manager, "user"), field)).toEqual([]);
+        }
+        expect(
+          data(
+            await run("query { retroQuestions(where: {topics: {}}) { id } }", {}, alice, "user"),
+            "retroQuestions",
+          ),
+        ).toEqual([]);
+        expect(
+          data(await run(board, { question: current.question }, alice, "user"), "retroQuestions"),
+        ).toMatchObject([
+          { topics: [], answers: [{ id: current.answer, author: null, assignment: null }] },
+        ]);
         const probes: [string, Record<string, unknown>][] = [
-          [topics, {}],
-          [assignments, {}],
-          [authors, {}],
-          [board, { question: current.question }],
           ["query { retroTopicsAggregate { aggregate { count } } }", {}],
-          ["query { retroQuestions { topics { id } } }", {}],
-          ["query { retroAnswers { author { email } assignment { topicId } } }", {}],
-          ["query { retroQuestions(where: {topics: {}}) { id } }", {}],
           [addTopic, { question: current.question, name: "Forged" }],
           [renameTopic, { id: first.id, name: "Forged" }],
           [deleteTopic, { id: first.id }],
@@ -454,6 +476,9 @@ describe("facilitator-only grouping and minimal author projection", () => {
             "retroAnswerAuthors",
           ),
         ).toEqual([]);
+        await db.query("DELETE FROM retro_session_participants WHERE session_id=$1", [
+          current.session,
+        ]);
       }
       expect(group.budget.signin).toBe(4);
       expect(group.budget.email).toBe(0);

@@ -11,6 +11,7 @@ export function TopicColumn({
   count,
   totalCount,
   busy,
+  readOnly = false,
   onRename,
   onDelete,
   children,
@@ -20,11 +21,12 @@ export function TopicColumn({
   count: number;
   totalCount: number;
   busy: boolean;
+  readOnly?: boolean;
   onRename: (name: string) => Promise<unknown>;
   onDelete: () => Promise<unknown>;
   children: ReactNode;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: readOnly });
   const drafts = useDrafts();
   const draftKey = `topic:${id}`;
   const [editing, setEditing] = useState(() => drafts?.has(draftKey) ?? false);
@@ -54,7 +56,7 @@ export function TopicColumn({
               <span className="sr-only">{totalCount === 1 ? " card" : " cards"}</span>
             </span>
           </div>
-          {topic && (
+          {topic && !readOnly && (
             <div className="title-actions">
               <IconButton
                 id={`rename-topic-${id}`}
@@ -81,7 +83,7 @@ export function TopicColumn({
           )}
         </div>
         {!topic && <p className="field-hint">Reflections waiting for a theme.</p>}
-        {editing && topic && (
+        {editing && topic && !readOnly && (
           <TextForm
             draftKey={draftKey}
             label={`Rename theme ${name}`}
@@ -110,7 +112,9 @@ export function TopicColumn({
             {totalCount > 0
               ? `No cards from the selected participants here (${totalCount} hidden by the filter).`
               : topic
-                ? "Move a card here to start a theme."
+                ? readOnly
+                  ? "No cards in this theme."
+                  : "Move a card here to start a theme."
                 : "All reflections have a place."}
           </p>
         )}

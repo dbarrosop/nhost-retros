@@ -1,6 +1,6 @@
 import type { Answer } from "../answers/api.js";
 
-// Only the facilitator route imports these projections; never use the user role.
+// Shared read projection: participant permissions reveal the full board only after ending.
 export type Topic = { id: string; name: string };
 export type BoardAnswer = Answer & {
   author: { id: string; displayName: string; email: string } | null;

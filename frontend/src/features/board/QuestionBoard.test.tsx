@@ -28,7 +28,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-function setup() {
+function setup(role: "user" | "facilitator" = "facilitator") {
   let board: Board = {
     id: "question",
     topics: [
@@ -129,7 +129,7 @@ function setup() {
   const view = (visible: boolean) => (
     <QueryClientProvider client={queries}>
       <DraftProvider>
-        {visible && <BoardWorkspace sessionId="session" questionId="question" />}
+        {visible && <BoardWorkspace sessionId="session" questionId="question" role={role} />}
       </DraftProvider>
     </QueryClientProvider>
   );
@@ -194,6 +194,32 @@ async function moveCard(
 }
 
 describe("facilitator reflection board", () => {
+  it("renders a participant board without mutation controls and removes it on access loss", async () => {
+    const app = setup("user"),
+      user = userEvent.setup();
+    expect(await screen.findByRole("article", { name: "Card 1 by Alice" })).toHaveTextContent(
+      "Make room for focused work",
+    );
+    expect(screen.getByRole("heading", { name: "Keep" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /Drag card|Rename theme|Delete theme|New theme/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Move card/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Alice (alice@nhost.io)" }));
+    expect(screen.getByRole("article", { name: "Card 1 by Alice" })).toBeVisible();
+    app.revoke();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    await waitFor(() => expect(screen.queryByRole("article")).not.toBeInTheDocument());
+    expect(
+      app.requests.every(
+        (request) => request.role === "user" && !request.query.includes("mutation"),
+      ),
+    ).toBe(true);
+    app.queries.clear();
+  });
   it("filters responses by author across topics and keeps grouping scoped to a visible card", async () => {
     const app = setup(),
       user = userEvent.setup();

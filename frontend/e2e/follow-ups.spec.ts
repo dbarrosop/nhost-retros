@@ -23,7 +23,7 @@ async function seed(context: BrowserContext, fixture: Actor) {
   );
 }
 
-test("facilitators capture owned actions and ticket links, including after ending, without participant exposure", async ({
+test("facilitators manage actions; participants gain a read-only board and follow-ups only after ending", async ({
   page,
   context,
   browser,
@@ -69,6 +69,31 @@ test("facilitators capture owned actions and ticket links, including after endin
       });
       await seed(ctx, fixture);
     }
+    for (const [author, text] of [
+      [alice.id, "Alice: protect focus time"],
+      [bob.id, "Bob: share release context"],
+    ])
+      await db.query("INSERT INTO retro_answers(question_id,author_id,text) VALUES($1,$2,$3)", [
+        questionId,
+        author,
+        text,
+      ]);
+    const topicId = (
+      await db.query(
+        "INSERT INTO retro_topics(question_id,name) VALUES($1,'Communication') RETURNING id",
+        [questionId],
+      )
+    ).rows[0].id;
+    await db.query(
+      "INSERT INTO retro_answer_topics(answer_id,question_id,topic_id) SELECT id,question_id,$2 FROM retro_answers WHERE question_id=$1 AND author_id=$3",
+      [questionId, topicId, bob.id],
+    );
+    const participant = await participantContext.newPage();
+    const participantRequests: string[] = [];
+    participant.on("request", (request) => {
+      if (request.url() === browserGraphql(target))
+        participantRequests.push(request.postDataJSON()?.query ?? "");
+    });
     const path = `/facilitate/${sessionId}/questions/${questionId}`;
     await page.goto(path);
     const composer = page.getByRole("form", { name: "New follow-up" });
@@ -93,6 +118,13 @@ test("facilitators capture owned actions and ticket links, including after endin
     await page.getByRole("link", { name: "← Back to session", exact: true }).click();
     const summary = page.getByRole("region", { name: "Follow-up summary", exact: true });
     await expect(summary.getByText("Improve release notes", { exact: true })).toBeVisible();
+    await participant.goto(`/sessions/${sessionId}`);
+    await expect(participant.getByText("Alice: protect focus time", { exact: true })).toBeVisible();
+    await expect(participant.getByText("Bob: share release context", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(participant.getByRole("region", { name: "Follow-up summary" })).toHaveCount(0);
+    expect(participantRequests.some((query) => /FollowUps/.test(query))).toBe(false);
     await page.getByRole("button", { name: "End session", exact: true }).click();
     await page
       .getByRole("dialog")
@@ -144,24 +176,54 @@ test("facilitators capture owned actions and ticket links, including after endin
         ["serious", "critical"].includes(issue.impact ?? ""),
       ),
     ).toEqual([]);
-    const participant = await participantContext.newPage();
-    const privateRequests: string[] = [];
-    participant.on("request", (request) => {
-      if (
-        request.url() === browserGraphql(target) &&
-        /FollowUps/.test(request.postDataJSON()?.query ?? "")
-      )
-        privateRequests.push("follow-ups");
-    });
-    await participant.goto(`/sessions/${sessionId}`);
+    const participantSummary = participant.getByRole("region", { name: "Follow-up summary" });
     await expect(
-      participant.getByRole("heading", { name: "What should we improve next?", exact: true }),
+      participantSummary.getByText("Publish release notes after ending", { exact: true }),
+    ).toBeVisible({ timeout: 5_000 });
+    await participantSummary
+      .getByRole("link", { name: "What should we improve next?", exact: true })
+      .click();
+    await expect(participant.getByRole("region", { name: "Reflection board" })).toBeVisible();
+    await expect(
+      participant
+        .getByRole("region", { name: "Communication", exact: true })
+        .getByText("Bob: share release context", { exact: true }),
     ).toBeVisible();
+    await expect(participant.getByText("Alice: protect focus time", { exact: true })).toBeVisible();
+    await expect(participant.getByText(`Owner: Bob (${bob.email})`, { exact: true })).toBeVisible();
+    await expect(participant.getByRole("link", { name: /Open ticket/ })).toHaveAttribute(
+      "href",
+      "https://linear.app/acme/issue/ACME-42",
+    );
+    await expect(
+      participant.getByRole("button", {
+        name: /Drag card|Rename theme|Delete theme|New theme|Edit follow-up|Delete follow-up|Add follow-up/,
+      }),
+    ).toHaveCount(0);
+    await expect(participant.getByLabel(/^Move card/)).toHaveCount(0);
+    await expect(participant.getByRole("form")).toHaveCount(0);
+    expect(
+      participantRequests.some((query) => /mutation|query QuestionFollowUps\(/.test(query)),
+    ).toBe(false);
+    const participantAccessibility = await new AxeBuilder({ page: participant }).analyze();
+    expect(
+      participantAccessibility.violations.filter((issue) =>
+        ["serious", "critical"].includes(issue.impact ?? ""),
+      ),
+    ).toEqual([]);
+    await db.query("DELETE FROM retro_session_participants WHERE session_id=$1 AND user_id=$2", [
+      sessionId,
+      alice.id,
+    ]);
+    await expect(participant.getByRole("heading", { name: "Question unavailable" })).toBeVisible({
+      timeout: 5_000,
+    });
+    await expect(participant.getByText("Bob: share release context", { exact: true })).toHaveCount(
+      0,
+    );
     await expect(
       participant.getByText("Publish release notes after ending", { exact: true }),
     ).toHaveCount(0);
-    await expect(participant.getByRole("region", { name: "Follow-up summary" })).toHaveCount(0);
-    expect(privateRequests).toEqual([]);
   } finally {
     await participantContext.close();
     await db.end();

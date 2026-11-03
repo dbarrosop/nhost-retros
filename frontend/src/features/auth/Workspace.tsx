@@ -74,12 +74,21 @@ export function Workspace({
             ) : sessionId && questionId && !isUuid(questionId) ? (
               <>
                 <h1>Question unavailable</h1>
-                <Link className="quiet-link" to="/facilitate/$sessionId" params={{ sessionId }}>
+                <Link
+                  className="quiet-link"
+                  to={role === "facilitator" ? "/facilitate/$sessionId" : "/sessions/$sessionId"}
+                  params={{ sessionId }}
+                >
                   ← Back to session
                 </Link>
               </>
-            ) : sessionId && questionId && role === "facilitator" ? (
-              <QuestionBoard key={questionId} sessionId={sessionId} questionId={questionId} />
+            ) : sessionId && questionId ? (
+              <QuestionBoard
+                key={questionId}
+                sessionId={sessionId}
+                questionId={questionId}
+                role={role}
+              />
             ) : sessionId ? (
               <SessionDetail key={sessionId} id={sessionId} role={role} />
             ) : (

@@ -65,7 +65,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
                     label="End session"
                     icon="end"
                     title="End this retrospective?"
-                    description="Ending is permanent. The session name, questions and answer cards will be frozen, including changes from other open tabs. You cannot reopen it."
+                    description="Ending is permanent. The session name, questions and answer cards will be frozen, including changes from other open tabs. All enrolled participants will be able to read everyone’s cards, authors, themes and follow-ups. You cannot reopen it."
                     disabled={change.isPending}
                     onConfirm={async () => {
                       await change.mutateAsync({
@@ -98,7 +98,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             </div>
             <p className="session-description">
               {session.ended
-                ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only."
+                ? "This conversation has ended. Its name, questions and answer cards are now permanently read-only. All participants can explore everyone’s cards, themes and follow-ups."
                 : role === "facilitator"
                   ? "Manage questions below. Open a board to explore your team’s reflections."
                   : "Reflect at your own pace. Add a card for each thought."}
@@ -141,7 +141,9 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
             readOnly={query.isError}
             role={role}
           />
-          {role === "facilitator" && <FollowUpSummary sessionId={id} />}
+          {(role === "facilitator" || session.ended) && (
+            <FollowUpSummary sessionId={id} role={role} />
+          )}
         </>
       )}
     </div>

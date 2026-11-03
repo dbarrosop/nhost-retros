@@ -1,5 +1,5 @@
 import { useIsMutating } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useLayoutEffect, useRef } from "react";
 import { DisclosureChevron } from "../../components/DisclosureChevron";
 import { HeaderMenu } from "../../components/HeaderMenu";
@@ -104,6 +104,15 @@ export function ParticipantQuestions({
       <h2 id="active-question-title" ref={heading} tabIndex={-1}>
         {question.text}
       </h2>
+      {ended && (
+        <Link
+          className="secondary-button open-board-link"
+          to="/sessions/$sessionId/questions/$questionId"
+          params={{ sessionId: question.sessionId, questionId: question.id }}
+        >
+          Explore everyone’s cards and follow-ups →
+        </Link>
+      )}
       <Answers
         key={question.id}
         questionId={question.id}
@@ -134,7 +143,7 @@ export function ParticipantQuestions({
           ? "Saving your card…"
           : !ended
             ? "Unsaved text stays with each question while you switch."
-            : "You can browse your saved cards, but this retrospective can no longer be changed."}
+            : "Everyone’s saved cards are now shared with participants. Open the board to explore themes and follow-ups."}
       </p>
     </section>
   );
