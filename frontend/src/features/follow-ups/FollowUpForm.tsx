@@ -8,6 +8,7 @@ import { ticketUrl } from "./validation";
 const empty: FollowUpInput = { action: "", ownerId: "", ticketUrl: null };
 
 export function FollowUpForm({
+  label,
   draftKey,
   initial = empty,
   accounts,
@@ -15,6 +16,7 @@ export function FollowUpForm({
   onSave,
   onCancel,
 }: {
+  label: string;
   draftKey: string;
   initial?: FollowUpInput;
   accounts: ParticipantAccount[];
@@ -48,7 +50,7 @@ export function FollowUpForm({
   return (
     <form
       className="text-form"
-      aria-label={onCancel ? "Edit follow-up" : "New follow-up"}
+      aria-label={label}
       aria-busy={pending}
       noValidate
       onSubmit={async (event) => {

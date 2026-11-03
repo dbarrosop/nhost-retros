@@ -91,6 +91,7 @@ export function FollowUps({
           <div className="editor-panel">
             <h3>Add a follow-up</h3>
             <FollowUpForm
+              label="New follow-up"
               draftKey={`follow-up:new:${questionId}`}
               accounts={accounts}
               blocked={busy}
@@ -164,6 +165,7 @@ function FollowUpItem({
         </div>
         {editing ? (
           <FollowUpForm
+            label={`Edit follow-up ${number}`}
             draftKey={draftKey}
             initial={followUp}
             accounts={accounts}

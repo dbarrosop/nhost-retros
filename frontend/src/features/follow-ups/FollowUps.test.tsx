@@ -154,6 +154,32 @@ const saved: FollowUp = {
 };
 
 describe("question follow-ups", () => {
+  it("gives concurrent editors distinct form landmarks, including after draft restoration", async () => {
+    const actions = [saved.action, "Document the rollout"] as const;
+    const app = setup([saved, { ...saved, id: "follow-2", action: actions[1] }]),
+      user = userEvent.setup();
+    await screen.findByText(saved.action);
+    await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
+    await user.click(screen.getByRole("button", { name: "Edit follow-up 2" }));
+    for (const [index, action] of actions.entries()) {
+      const editor = screen.getByRole("form", { name: `Edit follow-up ${index + 1}` });
+      expect(
+        within(screen.getByRole("article", { name: `Follow-up ${index + 1}` })).getByRole("form"),
+      ).toBe(editor);
+      expect(within(editor).getByLabelText("Action")).toHaveValue(action);
+      await user.type(within(editor).getByLabelText("Action"), " tomorrow");
+    }
+    expect(screen.getByRole("form", { name: "New follow-up" })).toBeVisible();
+    expect(screen.getAllByRole("form")).toHaveLength(3);
+    app.remount();
+    for (const [index, action] of actions.entries()) {
+      const editor = within(screen.getByRole("form", { name: `Edit follow-up ${index + 1}` }));
+      expect(editor.getByLabelText("Action")).toHaveValue(`${action} tomorrow`);
+    }
+    expect(screen.getByRole("form", { name: "New follow-up" })).toBeVisible();
+    expect(screen.getAllByRole("form")).toHaveLength(3);
+    app.queries.clear();
+  });
   it("restores all unsaved fields and edit mode after a same-account query subtree remount", async () => {
     const app = setup([saved]),
       user = userEvent.setup();
@@ -166,7 +192,7 @@ describe("question follow-ups", () => {
       "https://tickets.example.com/43",
     );
     await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
-    const edit = within(screen.getByRole("form", { name: "Edit follow-up" }));
+    const edit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
     await user.type(edit.getByLabelText("Action"), " tomorrow");
     await user.selectOptions(edit.getByLabelText("Owner"), "bob");
     const latestTicket = "https://tickets.example.com/44";
@@ -181,7 +207,7 @@ describe("question follow-ups", () => {
     expect(restored.getByLabelText("Ticket link (optional)")).toHaveValue(
       "https://tickets.example.com/43",
     );
-    const restoredEdit = within(screen.getByRole("form", { name: "Edit follow-up" }));
+    const restoredEdit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
     expect(restoredEdit.getByLabelText("Action")).toHaveValue("Improve release notes tomorrow");
     expect(restoredEdit.getByLabelText("Owner")).toHaveValue("bob");
     expect(restoredEdit.getByLabelText("Ticket link (optional)")).toHaveValue(latestTicket);
@@ -195,7 +221,7 @@ describe("question follow-ups", () => {
         user = userEvent.setup();
       await screen.findByText(saved.action);
       await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
-      const edit = within(screen.getByRole("form", { name: "Edit follow-up" }));
+      const edit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
       if (timing === "before") await user.type(edit.getByLabelText("Action"), " tomorrow");
       const latestTicket = "https://linear.app/acme/issue/ACME-42";
       app.updateFollowUp(saved.id, { ownerId: bob.id, owner: bob, ticketUrl: latestTicket });
@@ -250,7 +276,7 @@ describe("question follow-ups", () => {
     await screen.findByText("Document the rollout");
     expect(screen.getAllByRole("article")).toHaveLength(2);
     await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
-    const edit = within(screen.getByRole("form", { name: "Edit follow-up" }));
+    const edit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
     expect(edit.getByLabelText("Action")).toHaveFocus();
     await user.clear(edit.getByLabelText("Action"));
     await user.type(edit.getByLabelText("Action"), "Publish release notes");
@@ -330,7 +356,7 @@ describe("question follow-ups", () => {
     });
     expect(screen.getByText("Owner: Alice (alice@example.com)")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
-    const edit = within(screen.getByRole("form", { name: "Edit follow-up" }));
+    const edit = within(screen.getByRole("form", { name: "Edit follow-up 1" }));
     await user.type(edit.getByLabelText("Action"), " tomorrow");
     await act(async () => {
       await app.queries.invalidateQueries();

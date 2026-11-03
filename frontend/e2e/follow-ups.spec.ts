@@ -78,7 +78,7 @@ test("facilitators capture owned actions and ticket links, including after endin
     await expect(page.getByText("Improve release notes", { exact: true })).toBeVisible();
     await expect(page.getByText("No ticket linked yet.", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Edit follow-up 1", exact: true }).click();
-    const editor = page.getByRole("form", { name: "Edit follow-up" });
+    const editor = page.getByRole("form", { name: "Edit follow-up 1", exact: true });
     await expect(editor.getByLabel("Action", { exact: true })).toBeFocused();
     await editor.getByLabel("Owner", { exact: true }).selectOption(bob.id);
     await editor
