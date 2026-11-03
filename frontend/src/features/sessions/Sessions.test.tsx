@@ -493,6 +493,25 @@ describe("authorized retrospective workspace", () => {
     expect(app.requests.some((request) => /FollowUps/.test(request.query))).toBe(false);
     app.queries.clear();
   });
+  it("updates participant-management privacy copy when the session ends", async () => {
+    const app = setup(true, `/facilitate/${sessionId}`);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /^Participants/ }));
+    const activeCopy =
+      "Choose who can join this retrospective. Removing someone keeps their saved responses.";
+    expect(screen.getByText(activeCopy)).toBeVisible();
+    app.setEnded();
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
+    expect(
+      await screen.findByText(
+        "This session has ended: anyone you add can read everyone’s cards, authors, themes and follow-ups. Removing someone keeps their saved responses.",
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(activeCopy)).not.toBeInTheDocument();
+    app.queries.clear();
+  });
   it("warns that ending shares cards and outcomes with enrolled participants", async () => {
     const app = setup(true, `/facilitate/${sessionId}`);
     const user = userEvent.setup();

@@ -118,6 +118,12 @@ test("participants browse; trusted facilitators manage questions and permanently
     await reader.goto(`/sessions/${sessionId}`);
     await expect(reader.getByRole("heading", { name: "Session unavailable" })).toBeVisible();
     await page.getByRole("button", { name: /^Participants/ }).click();
+    await expect(
+      page.getByText(
+        "Choose who can join this retrospective. Removing someone keeps their saved responses.",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await page
       .getByRole("combobox", { name: "Add participant", exact: true })
       .fill(participant.email);
@@ -136,6 +142,11 @@ test("participants browse; trusted facilitators manage questions and permanently
     await expect(reader).toHaveURL(/\/workspace$/);
     expect(readerRoles.every((role) => role === "user")).toBe(true);
     await reader.getByRole("link", { name: new RegExp(name) }).click();
+    await page.getByRole("button", { name: `Remove ${participant.email}`, exact: true }).click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "They will lose access to this session and their cards. Their saved responses will remain visible to facilitators.",
+    );
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
 
     // A dirty question draft in a stale tab survives the other tab's closure.
     const stale = await context.newPage();
@@ -161,6 +172,12 @@ test("participants browse; trusted facilitators manage questions and permanently
     await expect(
       page.getByRole("button", { name: /End session|Rename session|Delete question/ }),
     ).not.toBeVisible();
+    await expect(
+      page.getByText(
+        "This session has ended: anyone you add can read everyone’s cards, authors, themes and follow-ups. Removing someone keeps their saved responses.",
+        { exact: true },
+      ),
+    ).toBeVisible();
     for (const view of [page, reader, stale])
       expect(
         await view.evaluate(
@@ -170,6 +187,9 @@ test("participants browse; trusted facilitators manage questions and permanently
     await stale.close();
     const remove = page.getByRole("button", { name: `Remove ${participant.email}`, exact: true });
     await remove.click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "They will lose access to this session and their cards. Their saved responses will remain visible to facilitators and enrolled participants.",
+    );
     await page
       .getByRole("dialog")
       .getByRole("button", { name: `Remove ${participant.email}`, exact: true })

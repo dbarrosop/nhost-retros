@@ -11,7 +11,7 @@ import {
   removeParticipant,
 } from "./participants-api";
 
-export function Participants({ sessionId }: { sessionId: string }) {
+export function Participants({ sessionId, ended }: { sessionId: string; ended: boolean }) {
   const query = useRetroQuery<ParticipantsResult>(
     "facilitator",
     ["participants", sessionId],
@@ -56,7 +56,9 @@ export function Participants({ sessionId }: { sessionId: string }) {
       {query.isError && <p role="alert">{readFailed}</p>}
       <div id={`${headingId}-content`} hidden={!expanded} className="participants-content">
         <p className="participants-description">
-          Choose who can join this retrospective. Removing someone keeps their saved responses.
+          {ended
+            ? "This session has ended: anyone you add can read everyone’s cards, authors, themes and follow-ups. Removing someone keeps their saved responses."
+            : "Choose who can join this retrospective. Removing someone keeps their saved responses."}
         </p>
         {query.isPending ? (
           <p role="status">Loading participants…</p>
@@ -87,7 +89,11 @@ export function Participants({ sessionId }: { sessionId: string }) {
                       label={`Remove ${account?.email || "participant"}`}
                       icon="close"
                       title="Remove participant?"
-                      description="They will lose access to this session and their cards. Their saved responses will remain visible to facilitators."
+                      description={
+                        ended
+                          ? "They will lose access to this session and their cards. Their saved responses will remain visible to facilitators and enrolled participants."
+                          : "They will lose access to this session and their cards. Their saved responses will remain visible to facilitators."
+                      }
                       disabled={busy}
                       afterConfirm={() => toggle.current?.focus()}
                       onConfirm={() =>

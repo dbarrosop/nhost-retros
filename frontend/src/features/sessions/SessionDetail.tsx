@@ -133,7 +133,7 @@ export function SessionDetail({ id, role }: { id: string; role: AppRole }) {
               <span className="field-hint">Enroll yourself in Participants to contribute.</span>
             </p>
           )}
-          {role === "facilitator" && <Participants sessionId={id} />}
+          {role === "facilitator" && <Participants sessionId={id} ended={session.ended} />}
           <Questions
             questions={session.questions}
             sessionId={id}

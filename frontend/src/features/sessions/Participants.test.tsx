@@ -27,7 +27,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-function setup() {
+function setup(ended = false) {
   const accounts = [
     { id: "alice", displayName: "Alice Morgan", email: "alice@example.com" },
     { id: "bob", displayName: "Bob Lee", email: "bob@example.com" },
@@ -80,7 +80,7 @@ function setup() {
   queries.setDefaultOptions({ queries: { retry: false } });
   render(
     <QueryClientProvider client={queries}>
-      <Participants sessionId="session" />
+      <Participants sessionId="session" ended={ended} />
     </QueryClientProvider>,
   );
   return {
@@ -133,11 +133,18 @@ describe("facilitator participant controls", () => {
     app.queries.clear();
   });
 
-  it("opens searchable options, adds on selection and removes through an accessible X button", async () => {
-    const app = setup(),
+  it.each([false, true])("explains participant access (ended=%s)", async (ended) => {
+    const app = setup(ended),
       user = userEvent.setup();
     await screen.findByText("No participants yet.");
     await user.click(screen.getByRole("button", { name: /^Participants/ }));
+    expect(
+      screen.getByText(
+        ended
+          ? "This session has ended: anyone you add can read everyone’s cards, authors, themes and follow-ups. Removing someone keeps their saved responses."
+          : "Choose who can join this retrospective. Removing someone keeps their saved responses.",
+      ),
+    ).toBeVisible();
     const input = screen.getByRole("combobox", { name: "Add participant" });
     await user.click(input);
     expect(input.parentElement?.querySelector("svg.participant-search-chevron")).toHaveClass(
@@ -166,7 +173,11 @@ describe("facilitator participant controls", () => {
     expect(screen.queryByRole("option", { name: /Alice Morgan/ })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Bob Lee/ })).toBeVisible();
     await user.click(remove);
-    expect(screen.getByRole("dialog")).toHaveTextContent("saved responses will remain");
+    expect(screen.getByRole("dialog")).toHaveTextContent(
+      ended
+        ? "They will lose access to this session and their cards. Their saved responses will remain visible to facilitators and enrolled participants."
+        : "They will lose access to this session and their cards. Their saved responses will remain visible to facilitators.",
+    );
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(remove).toHaveFocus();
     await user.click(remove);
