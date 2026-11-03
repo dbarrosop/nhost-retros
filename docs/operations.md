@@ -531,9 +531,12 @@ closed session cannot be renamed, reopened or deleted, and its questions cannot
 be added/edited/deleted. Answer cards also become immutable. Database triggers lock
 before inspecting closure, so concurrent/stale API writes cannot bypass this rule.
 Empty-only deletion and restrictive foreign keys prevent accidental cascades.
-The facilitator-only board is available from each question before and after
-ending. Use the grip to drag with mouse, touch or keyboard, or use the always
-available Move-to menu; topics remain editable after closure.
+The facilitator-managed board is available from each question before and after
+ending. Facilitators can use the grip to drag with mouse, touch or keyboard, or the
+Move-to menu; topics and grouping remain editable after closure. After ending,
+current eligible participants get a read-only board at
+`/sessions/<sessionId>/questions/<questionId>` and a session-level follow-up summary,
+with no theme, move or follow-up management controls.
 
 The UI counts Unicode code points, not JavaScript UTF-16 length. SQL applies the
 same explicit whitespace trimming set: names allow 1–120 code points, questions
@@ -551,16 +554,27 @@ do not disable triggers or delete developer data. Scratch migration down/up is
 still confined to its minted database. `pnpm test:e2e` applies current migrations
 and metadata independently and checks desktop/mobile management and read-only
 participant flows, including multiple private cards, cross-tab closure and draft
-retention. Participant card reads omit author IDs; facilitators may read all cards
-and author IDs but cannot edit/delete others’ content. For their own participation,
-facilitators must first add themselves under **Participants**, then follow the
-session’s participant link, which sends the ordinary user role. The facilitator
-API additionally exposes IDs, display names and emails through `retroAnswerAuthors`
-for retained-answer authors, `retroParticipantAccounts` for every verified,
-eligible account, used for enrollment whether or not it has answered, and
-`retroFollowUpOwners` for retained follow-up owners, including removed participants.
-Participants cannot select or filter by any of these projections or by grouping
-or follow-up relationships.
+retention. While active, participants can read only their own cards, including
+selectable `authorId`; these reads are not anonymous. After ending, current eligible
+participants can read every card and `authorId` in that session, plus author
+identities, themes, assignments, follow-ups and owners. Facilitators may read all
+cards and author IDs but cannot edit/delete others’ content. For their own
+participation, facilitators must first add themselves under **Participants**, then
+follow the session’s participant link, which sends the ordinary user role.
+
+Facilitators can select and filter `retroAnswerAuthors` and `retroFollowUpOwners`
+(IDs, display names and emails), including retained authors/owners removed from the
+session. Eligible participants can also read/filter these identities when backed
+by a visible ended-session contribution. For `user`, an author identity is visible
+if that author has an answer in any ended session the reader currently belongs to;
+an owner identity similarly requires a follow-up in such a session. Thus `retroAnswers.author` on an own active
+card is null without that ended-session visibility, but can resolve if its author
+is already visible through another ended session. Knowing an identity never grants
+access to its other private cards or follow-ups. Ended-session grouping and
+follow-up relationships are selectable and filterable, subject to the same live
+eligibility/enrollment boundary. The `retroParticipantAccounts` eligible-account
+picker remains facilitator-only, whether or not an account has answered; sharing
+adds no participant management permissions or aggregates.
 
 ### Facilitator grouping API
 
@@ -571,7 +585,8 @@ move (`topicId` only), and delete (Ungrouped). An answer has at most one assignm
 composite foreign keys reject cross-question/session targets. Topic/assignment
 identities and parents cannot change. All operations require the explicit
 `facilitator` role plus live eligibility/membership, even with a previously issued
-JWT. `user`/`me` have no grouping/author schema or aggregates.
+JWT. `user` has read-only ended-session grouping/author types and relationships,
+but no grouping mutations or aggregates. Internal `me` still has no app schema.
 
 Grouping does not update answer text, authorship or timestamps and remains writable
 after closure. Topic deletion removes only assignments; cards become Ungrouped.
@@ -716,25 +731,52 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    Before allowed-access checks, enroll synthetic participants in the smoke session
    with the facilitator-role `insertRetroSessionParticipants` mutation or approved
    SQL; the new **Participants** UI is not published yet. Keep a separate eligible
-   account unenrolled for denial checks.
+   account unenrolled for denial checks, and separate active-session fixtures for
+   isolation/removal checks after closure. Use isolated fixtures without other
+   shared ended sessions for author/owner identity-denial checks: identity visibility
+   can come from another ended enrollment, even when the current session is active.
 
-   - An enrolled participant can read the session and its questions (directly and
-     through nested relationships), read only their own cards, and insert/edit/delete
-     their own cards while the session is active.
-   - An eligible but non-enrolled account cannot read that session, its questions or
-     own cards, or insert answers. Membership in a different session grants no access.
-   - Remove an enrolled author and reuse their already-issued JWT: session, question
-     and own-card reads must lose access, and answer inserts/updates/deletes must be
-     denied. Their retained responses must remain visible to facilitators, whose
-     global management/board access does not require session enrollment.
-   - Also verify two-user private multi-card isolation, denied forged facilitator
-     headers and live **facilitator-role** revocation, closure rejecting later content
-     writes, and facilitator-only grouping after closure.
-   - Using the `user` role (including a facilitator's ordinary participant route),
-     verify denial of `retroFollowUps`, `retroFollowUpOwners` and
-     `retroQuestions.followUps`, including relationship filters. Follow-up reads and
-     mutations must also lose access immediately after live facilitator revocation
-     with an already-issued JWT.
+   - Using `user` (including a facilitator's ordinary participant route), an enrolled
+     eligible participant can read the active session and its questions, read only
+     their own cards, and insert/edit/delete their own cards. Verify two-user
+     multi-card isolation through root, nested and by-PK reads: others' cards are
+     absent/null, not the participant's own cards. Own-card `authorId` is selectable;
+     `author` may resolve if already visible through an ended enrollment, as
+     described above. Active-session topics, assignments and follow-ups remain
+     empty/null, including `retroQuestions.topics/followUps` and
+     `retroAnswers.assignment`; relationship filters must not reveal hidden outcomes.
+   - End the smoke session. The same enrolled eligible participant must now read
+     every card and `authorId`, retained author identity, theme, assignment,
+     follow-up and owner (including IDs, display names and emails). Check root
+     `retroAnswers`, `retroAnswerAuthors`, `retroTopics`, `retroAnswerTopics`,
+     `retroFollowUps` and `retroFollowUpOwners` selections and relationship filters;
+     nested `retroSessions.questions`, `retroQuestions.answers/topics/followUps` and
+     `retroAnswers.author/assignment`; and by-PK `retroAnswer`, `retroTopic`,
+     `retroAnswerTopic` and `retroFollowUp`. Author/owner projections have list roots,
+     not by-PK roots. Traversing `retroAnswerAuthors.answers` must still return only
+     own active cards plus cards in accessible ended sessions;
+     `retroFollowUpOwners.followUps` must return only accessible ended follow-ups.
+     Known IDs and filters must not bypass these row permissions.
+   - An eligible non-member (including a member of a different session), a removed
+     member and an ineligible account must receive no session/question/card or
+     shared-outcome data for this session through those root, nested, by-PK and
+     filter paths. Reuse already-issued JWTs after removal and after disabling an
+     account, clearing verification or revoking ordinary `user` membership. For
+     isolated fixtures, author/owner lists must also be empty; unrelated ended
+     enrollments can independently keep an identity visible, not its hidden content.
+     Removal must preserve cards, grouping, follow-ups and attribution for remaining
+     eligible members after ending and for facilitators, whose global management
+     access does not require enrollment. While active, non-members, removed members
+     and ineligible accounts must also be denied answer inserts/updates/deletes.
+   - Sharing must not expose `retroParticipantAccounts` (root or nested account
+     picker), root/nested aggregates, participant enrollment management, or any
+     `user` grouping/follow-up mutations. After ending, reject all answer
+     inserts/updates/deletes, including own-card writes; session names and questions
+     remain frozen and reopening/deletion is forbidden. Verify denied forged
+     facilitator headers and live **facilitator-role** revocation with an old JWT:
+     facilitator reads/writes must lose access. An independently eligible, enrolled
+     `user` can still read shared ended outcomes, not manage them. With a live trusted
+     facilitator, verify theme/grouping writes still work after closure.
    - Verify facilitator follow-up CRUD before and after ending. New or reassigned
      owners must be current eligible participants in the question's session; reject
      non-enrolled, removed or ineligible owners. Removing an owner must retain
@@ -754,9 +796,16 @@ with immutable hashed assets and revalidated HTML. No API proxy is deployed.
    themselves before answering through the ordinary participant route. Create, edit,
    reassign and delete facilitator follow-ups on a question board, including the
    optional ticket link; verify the session-level summary and its links back to
-   question boards. Repeat follow-up CRUD and summary checks after ending, including
-   retained owner attribution after removal, and confirm the participant workspace
-   exposes neither follow-ups nor their owners.
+   question boards. Repeat facilitator follow-up CRUD and summary checks after
+   ending, including retained owner attribution after removal. In the participant
+   workspace, verify active sessions have neither the shared-board link nor the
+   follow-up summary; direct participant-board links must show Question unavailable.
+   After ending, verify the session summary shows actions and owners and links to
+   the read-only participant board, which shows all cards, authors, themes,
+   assignments, follow-ups and retained owners. Confirm no drag grips, Move-to,
+   theme create/rename/delete, follow-up management or account-picker controls are
+   exposed, and no answer edits are possible. Exercise the participant deep link
+   with a direct reload as well as navigation.
    Inspect browser requests for the expected explicit role and canonical endpoint.
    Stop onboarding on failed authorization or freeze checks; do not mask them by
    switching engines or loosening permissions.
@@ -778,22 +827,24 @@ backup owner, an explicit outage/data-loss decision and a tested recovery plan.
 Application `down.sql` files are exercised only in disposable scratch databases:
 they drop application data and are **not** a production rollback recipe. Role down
 also refuses existing facilitator grants/defaults; never delete grants just to
-force a downgrade through. Preserve grouping/follow-up privacy and the independent
-frozen-content boundary during any compatible rollback and rerun both-engine smoke
-checks.
+force a downgrade through. Preserve active-card isolation, live eligibility and
+enrollment checks for shared ended outcomes, and the independent frozen-content
+boundary during any compatible rollback; rerun both-engine smoke checks.
 
 Answer-author and follow-up-owner foreign keys deliberately prevent account
 deletion while answers or owned follow-ups exist, including privileged SQL deletion.
 An owner need not have written a card to be retained. There is no hidden cascade or
 general maintenance bypass. Retire an account by disabling access, revoking refresh
 sessions and facilitator membership without erasing its retained cards or follow-ups;
-both remain attributed. The facilitator-only `retroFollowUpOwners` projection still
-exposes retained owners' IDs, display names and emails, including after removal
-from a session or account retirement.
+both remain attributed. `retroAnswerAuthors` and `retroFollowUpOwners` expose
+retained authors' and owners' IDs, display names and emails to facilitators and to
+current eligible participants of ended sessions containing those contributions,
+including after the author/owner's removal from a session or account retirement.
 
 Any retention/deletion request requires a separate explicit, backed-up and reviewed
 operator procedure addressing immutable ended content, author and owner identity
-(including `retroFollowUpOwners`) and legal retention. Before deleting an account,
+(including `retroAnswerAuthors` and `retroFollowUpOwners`), both facilitator and
+ended-session participant audiences, and legal retention. Before deleting an account,
 reassign each owned follow-up to a current eligible participant in its question's
 session or explicitly delete it. Unlike frozen ended cards, follow-ups remain
 mutable and deletable after ending; resolving them does not remove any retained
