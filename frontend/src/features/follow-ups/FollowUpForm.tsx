@@ -24,19 +24,15 @@ export function FollowUpForm({
 }) {
   const id = useId();
   const drafts = useDrafts();
-  const [value, setValue] = useState<FollowUpInput>(() => {
+  const [patch, setPatch] = useState<Partial<FollowUpInput>>(() => {
     const draft = drafts?.get(draftKey);
-    const fields = {
-      action: initial.action,
-      ownerId: initial.ownerId,
-      ticketUrl: initial.ticketUrl,
-    };
     try {
-      return draft ? (JSON.parse(draft) as FollowUpInput) : fields;
+      return draft ? (JSON.parse(draft) as Partial<FollowUpInput>) : {};
     } catch {
-      return fields;
+      return {};
     }
   });
+  const value = { ...initial, ...patch };
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const editing = Boolean(onCancel);
@@ -44,9 +40,9 @@ export function FollowUpForm({
     if (editing) document.getElementById(`${id}-action`)?.focus();
   }, [id, editing]);
   const busy = pending || blocked;
-  const update = (patch: Partial<FollowUpInput>) => {
-    const next = { ...value, ...patch };
-    setValue(next);
+  const update = (fields: Partial<FollowUpInput>) => {
+    const next = { ...patch, ...fields };
+    setPatch(next);
     drafts?.set(draftKey, JSON.stringify(next));
   };
   return (
@@ -80,7 +76,7 @@ export function FollowUpForm({
         try {
           await onSave(input);
           drafts?.delete(draftKey);
-          setValue(empty);
+          setPatch({});
         } catch {
           setError(followUpFailed);
         } finally {

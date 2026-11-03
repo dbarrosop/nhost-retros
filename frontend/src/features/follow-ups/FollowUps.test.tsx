@@ -140,6 +140,9 @@ function setup(initial: FollowUp[] = []) {
     removeAlice: () => {
       accounts = [bob];
     },
+    updateFollowUp: (id: string, patch: Partial<FollowUp>) => {
+      followUps = followUps.map((item) => (item.id === id ? { ...item, ...patch } : item));
+    },
   };
 }
 const saved: FollowUp = {
@@ -166,6 +169,11 @@ describe("question follow-ups", () => {
     const edit = within(screen.getByRole("form", { name: "Edit follow-up" }));
     await user.type(edit.getByLabelText("Action"), " tomorrow");
     await user.selectOptions(edit.getByLabelText("Owner"), "bob");
+    const latestTicket = "https://tickets.example.com/44";
+    app.updateFollowUp(saved.id, { action: "Changed elsewhere", ticketUrl: latestTicket });
+    await act(async () => {
+      await app.queries.invalidateQueries();
+    });
     app.remount();
     const restored = within(screen.getByRole("form", { name: "New follow-up" }));
     expect(restored.getByLabelText("Action")).toHaveValue("New unsaved action");
@@ -176,9 +184,41 @@ describe("question follow-ups", () => {
     const restoredEdit = within(screen.getByRole("form", { name: "Edit follow-up" }));
     expect(restoredEdit.getByLabelText("Action")).toHaveValue("Improve release notes tomorrow");
     expect(restoredEdit.getByLabelText("Owner")).toHaveValue("bob");
+    expect(restoredEdit.getByLabelText("Ticket link (optional)")).toHaveValue(latestTicket);
     expect(app.requests.some((request) => request.query.includes("mutation"))).toBe(false);
     app.queries.clear();
   });
+  it.each(["before", "after"])(
+    "preserves concurrent owner and ticket changes when action is edited %s a refetch",
+    async (timing) => {
+      const app = setup([{ ...saved, ticketUrl: null }]),
+        user = userEvent.setup();
+      await screen.findByText(saved.action);
+      await user.click(screen.getByRole("button", { name: "Edit follow-up 1" }));
+      const edit = within(screen.getByRole("form", { name: "Edit follow-up" }));
+      if (timing === "before") await user.type(edit.getByLabelText("Action"), " tomorrow");
+      const latestTicket = "https://linear.app/acme/issue/ACME-42";
+      app.updateFollowUp(saved.id, { ownerId: bob.id, owner: bob, ticketUrl: latestTicket });
+      await act(async () => {
+        await app.queries.invalidateQueries();
+      });
+      await waitFor(() => expect(edit.getByLabelText("Owner")).toHaveValue("bob"));
+      expect(edit.getByLabelText("Ticket link (optional)")).toHaveValue(latestTicket);
+      if (timing === "after") await user.type(edit.getByLabelText("Action"), " tomorrow");
+      expect(edit.getByLabelText("Action")).toHaveValue("Improve release notes tomorrow");
+      await user.click(edit.getByRole("button", { name: "Save follow-up" }));
+      await screen.findByText("Improve release notes tomorrow");
+      expect(
+        app.requests.find((request) => request.query.includes("mutation EditFollowUp("))?.variables,
+      ).toEqual({
+        id: saved.id,
+        action: "Improve release notes tomorrow",
+        ownerId: "bob",
+        ticketUrl: latestTicket,
+      });
+      app.queries.clear();
+    },
+  );
   it("creates multiple actions, edits/reassigns them and confirms deletion without changing tickets", async () => {
     const app = setup(),
       user = userEvent.setup();

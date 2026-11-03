@@ -579,8 +579,10 @@
   permissions also require no follow-ups. Empty active questions become deletable
   again after explicit action deletion. Identity, parent and creation time are
   immutable; the migration creates no actions or memberships for existing sessions.
-- **Preserve unsaved intent and safe navigation.** Editors keep all unsaved fields
-  in the existing route/account-scoped in-memory draft provider. Refetches and failed,
-  offline or zero-row writes do not reset them; read failures pause submission.
+- **Preserve unsaved intent and safe navigation.** Editors retain only edited fields
+  in the existing route/account-scoped in-memory draft provider, merging them over
+  the latest server row for display and submission. Untouched fields follow refetches
+  rather than reverting concurrent changes; failed, offline or zero-row writes do not
+  reset edited fields. Read failures pause submission.
   Deletion requires confirmation and never touches the linked external ticket.
   Links are revalidated before rendering and open with `noopener noreferrer`.
